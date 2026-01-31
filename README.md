@@ -1,3 +1,7 @@
+## Live Demo
+http://regispot-signup.s3-website-us-east-1.amazonaws.com
+
+
 # Register Session
 
 This is a personal project web application called RegiSpot.
