@@ -1,6 +1,5 @@
 ## Live Demo
-http://regispot-signup.s3-website-us-east-1.amazonaws.com
-
+https://d3drhebc0ddq5m.cloudfront.net/
 
 # Register Session
 
