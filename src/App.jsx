@@ -32,7 +32,7 @@ export default function App() {
 
   return (
     <div style={{ padding: "2rem" }}>
-      <h1>🏸 Badminton Session Signup</h1>
+      <h1>🏸 Vanminton Session Signup</h1>
 
       {sessions.map((s) => {
         const spotsLeft = s.capacity - s.signups.length;
