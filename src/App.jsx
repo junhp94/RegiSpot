@@ -1,41 +1,42 @@
-import { use, useEffect, useState } from 'react'
-import './App.css'
-import { getSessions, signup as apiSignup } from './api';
-
+import { useEffect, useState } from "react";
+import "./App.css";
+import { getSessions, signup as apiSignup } from "./api";
 
 export default function App() {
   const [sessions, setSessions] = useState([]);
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(true);
 
-  async function refreshSessions() {
+  async function refresh() {
     setLoading(true);
     const data = await getSessions();
     setSessions(data);
     setLoading(false);
   }
+
   useEffect(() => {
-    refreshSessions();
+    refresh();
   }, []);
 
   const signup = async (sessionId) => {
     try {
       await apiSignup(sessionId, name);
       setName("");
-      await refreshSessions();
+      await refresh();
+      alert("Signed up!");
     } catch (e) {
-      alert(e.message || "Signup failed" );
+      alert(e.message || "Signup failed");
     }
   };
 
-  if (loading) return <div style={{ padding: "2rem" }}>Loading...</div>;
+  if (loading) return <div style={{ padding: "2rem" }}>Loading…</div>;
 
   return (
     <div style={{ padding: "2rem" }}>
-      <h1>🏸 Vanminton Session Signup</h1>
+      <h1>🏸 RegiSpot Signup</h1>
 
       {sessions.map((s) => {
-        const spotsLeft = s.capacity - s.signups.length;
+        const spotsLeft = s.capacity - (s.signedUpCount ?? 0);
         const isFull = spotsLeft <= 0;
 
         return (
@@ -44,14 +45,15 @@ export default function App() {
               {s.date} ({s.time})
             </h3>
             <p>{s.location}</p>
-            <p>Spots left: {spotsLeft}</p>
+            <p>
+              Spots left: {spotsLeft} / {s.capacity}
+            </p>
 
             <input
               placeholder="Your name"
               value={name}
               onChange={(e) => setName(e.target.value)}
             />
-
             <button
               onClick={() => signup(s.id)}
               disabled={isFull}
@@ -59,12 +61,6 @@ export default function App() {
             >
               {isFull ? "Full" : "Join"}
             </button>
-
-            <ul>
-              {s.signups.map((n, i) => (
-                <li key={`${s.id}-${i}`}>{n}</li>
-              ))}
-            </ul>
           </div>
         );
       })}
