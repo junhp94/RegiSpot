@@ -7,15 +7,15 @@ This is a personal project web application called RegiSpot.
 It helps group of people to register for a sport session.
 
 * Frontend
- - React + Vite 
- - Hosted on Amazon S3
- - Amazon CloudFront (HTTPS support)
+    - React + Vite 
+    - Hosted on Amazon S3
+    - Amazon CloudFront (HTTPS support)
 
 * Backend (serverless)
- - Amazon API Gateway
- - AWS Lambda
- - DynamoDB
+    - Amazon API Gateway
+    - AWS Lambda
+    - DynamoDB
 
 * Infrastructure & DevOps
- - AWS SAM
- - IAM
+    - AWS SAM
+    - IAM
