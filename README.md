@@ -6,16 +6,16 @@ https://d3drhebc0ddq5m.cloudfront.net/
 This is a personal project web application called RegiSpot.
 It helps group of people to register for a sport session.
 
-- Frontend
+* Frontend
  - React + Vite 
  - Hosted on Amazon S3
  - Amazon CloudFront (HTTPS support)
 
-- Backend (serverless)
+* Backend (serverless)
  - Amazon API Gateway
  - AWS Lambda
  - DynamoDB
 
-- Infrastructure & DevOps
+* Infrastructure & DevOps
  - AWS SAM
  - IAM
