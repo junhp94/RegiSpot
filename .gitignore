@@ -23,3 +23,14 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# AWS SAM downloads/installers
+backend/sam.zip
+backend/sam-install/
+
+# SAM build artifacts
+**/.aws-sam/
+**/samconfig.toml
+
+# Node stuff
+node_modules/
