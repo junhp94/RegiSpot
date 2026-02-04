@@ -1,0 +1,119 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: RegiSpot backend (sessions + signup)
+
+Globals:
+  Function:
+    Runtime: nodejs20.x
+    Timeout: 10
+    MemorySize: 128
+    Environment:
+      Variables:
+        TABLE_NAME: !Ref RegiSpotTable
+
+Resources:
+  RegiSpotTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: RegiSpotTable
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: PK
+          AttributeType: S
+        - AttributeName: SK
+          AttributeType: S
+      KeySchema:
+        - AttributeName: PK
+          KeyType: HASH
+        - AttributeName: SK
+          KeyType: RANGE
+
+  Api:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: prod
+      Cors:
+        AllowMethods: "'GET,POST,OPTIONS'"
+        AllowHeaders: "'content-type'"
+        AllowOrigin: "'*'"
+
+  GetSessionsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      Handler: src/getSessions.handler
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref RegiSpotTable
+      Events:
+        GetSessions:
+          Type: Api
+          Properties:
+            RestApiId: !Ref Api
+            Path: /sessions
+            Method: GET
+
+        GetGroupSessions:
+          Type: Api
+          Properties:
+            RestApiId: !Ref Api
+            Path: /groups/{groupId}/sessions
+            Method: GET
+
+  SignupFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      Handler: src/signup.handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref RegiSpotTable
+        - Statement:
+            Effect: Allow
+            Action:
+              - dynamodb:TransactWriteItems
+            Resource:
+              - !GetAtt RegiSpotTable.Arn
+      Events:
+        Signup:
+          Type: Api
+          Properties:
+            RestApiId: !Ref Api
+            Path: /sessions/{sessionId}/signup
+            Method: POST
+        SignupGroup:
+          Type: Api
+          Properties:
+            RestApiId: !Ref Api
+            Path: /groups/{groupId}/sessions/{sessionId}/signup
+            Method: POST
+
+
+  GetSignupsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      Handler: src/getSignups.handler
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref RegiSpotTable
+      Events:
+        GetSignups:
+          Type: Api
+          Properties:
+            RestApiId: !Ref Api
+            Path: /sessions/{sessionId}/signups
+            Method: GET
+        GetSignupsGroup:
+          Type: Api
+          Properties:
+            RestApiId: !Ref Api
+            Path: /groups/{groupId}/sessions/{sessionId}/signups
+            Method: GET
+
+
+Outputs:
+  ApiUrl:
+    Description: API Gateway endpoint URL
+    Value: !Sub "https://${Api}.execute-api.${AWS::Region}.amazonaws.com/prod"
+
