@@ -1,4 +1,6 @@
-const API_BASE = "https://rvqmjke48k.execute-api.us-east-1.amazonaws.com/prod";
+const API_BASE =
+  import.meta.env.VITE_API_BASE ||
+  "https://rvqmjke48k.execute-api.us-east-1.amazonaws.com/prod";
 
 async function readJson(res, fallback) {
   const data = await res.json().catch(() => fallback);

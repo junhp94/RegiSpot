@@ -1,33 +1,22 @@
-const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
-const { DynamoDBDocumentClient, QueryCommand } = require("@aws-sdk/lib-dynamodb");
-
-const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
-
-function cors() {
-  return {
-    "content-type": "application/json",
-    "access-control-allow-origin": "*",
-    "access-control-allow-methods": "GET,POST,OPTIONS",
-  };
-}
+const { QueryCommand } = require("@aws-sdk/lib-dynamodb");
+const { ddb, ok, badRequest, serverError } = require("./lib/utils");
 
 exports.handler = async (event) => {
   const TableName = process.env.TABLE_NAME;
-
   const groupId = event.pathParameters?.groupId;
   const sessionId = event.pathParameters?.sessionId;
 
   if (!groupId) {
-    return { statusCode: 400, headers: cors(), body: JSON.stringify({ error: "Missing groupId" }) };
+    return badRequest("Missing groupId");
   }
   if (!sessionId) {
-    return { statusCode: 400, headers: cors(), body: JSON.stringify({ error: "Missing sessionId" }) };
+    return badRequest("Missing sessionId");
   }
 
-  const pk = `GROUP#${groupId}`;
-  const prefix = `SIGNUP#${sessionId}#`;
-
   try {
+    const pk = `GROUP#${groupId}`;
+    const prefix = `SIGNUP#${sessionId}#`;
+
     const res = await ddb.send(
       new QueryCommand({
         TableName,
@@ -39,10 +28,14 @@ exports.handler = async (event) => {
       })
     );
 
-    const out = (res.Items || []).map((x) => ({ name: x.name, createdAt: x.createdAt }));
-    return { statusCode: 200, headers: cors(), body: JSON.stringify(out) };
+    const signups = (res.Items || []).map((x) => ({
+      name: x.name,
+      createdAt: x.createdAt,
+    }));
+
+    return ok(signups);
   } catch (e) {
-    console.error(e);
-    return { statusCode: 500, headers: cors(), body: JSON.stringify({ error: "Server error" }) };
+    console.error("getSignups error:", e);
+    return serverError();
   }
 };
