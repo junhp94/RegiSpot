@@ -1,69 +1,85 @@
-import { useEffect, useState } from "react";
+
+import { useState } from "react";
 import "./App.css";
-import { getSessions, signup as apiSignup } from "./api";
+import TopBar from "./components/TopBar";
+import Toast from "./components/Toast";
+import SessionCard from "./components/SessionCard";
+import useSessions from "./hooks/useSessions";
+
+function LoadingSkeleton() {
+  return (
+    <div className="page">
+      <div className="shell">
+        <div className="topbar">
+          <div className="brand">
+            <div className="logo">🏸</div>
+            <div>
+              <div className="title">RegiSpot</div>
+              <div className="subtitle">Badminton session signup</div>
+            </div>
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="skeleton-line" />
+          <div className="skeleton-line short" />
+          <div className="skeleton-line" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 
 export default function App() {
-  const [sessions, setSessions] = useState([]);
-  const [name, setName] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [groupId, setGroupId] = useState("test");
 
-  async function refresh() {
-    setLoading(true);
-    const data = await getSessions();
-    setSessions(data);
-    setLoading(false);
+  const {
+    sessions,
+    name,
+    setName,
+    loading,
+    openSessionId,
+    signupsBySession,
+    toast,
+    signup,
+    toggleSignups,
+    clearToast,
+  } = useSessions(groupId);
+
+  if (loading) {
+    return <LoadingSkeleton />;
   }
 
-  useEffect(() => {
-    refresh();
-  }, []);
-
-  const signup = async (sessionId) => {
-    try {
-      await apiSignup(sessionId, name);
-      setName("");
-      await refresh();
-      alert("Signed up!");
-    } catch (e) {
-      alert(e.message || "Signup failed");
-    }
-  };
-
-  if (loading) return <div style={{ padding: "2rem" }}>Loading…</div>;
-
   return (
-    <div style={{ padding: "2rem" }}>
-      <h1>🏸 RegiSpot Signup</h1>
+    <div className="page">
+      <div className="shell">
+        <TopBar
+          groupId={groupId}
+          setGroupId={setGroupId}
+          name={name}
+          setName={setName}
+        />
 
-      {sessions.map((s) => {
-        const spotsLeft = s.capacity - (s.signedUpCount ?? 0);
-        const isFull = spotsLeft <= 0;
-
-        return (
-          <div key={s.id} style={{ marginTop: "1.5rem" }}>
-            <h3>
-              {s.date} ({s.time})
-            </h3>
-            <p>{s.location}</p>
-            <p>
-              Spots left: {spotsLeft} / {s.capacity}
-            </p>
-
-            <input
-              placeholder="Your name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
+        <Toast toast={toast} onClose={clearToast} />
+          
+        <div className="grid">
+          {sessions.map((session) => (
+            <SessionCard
+              key={session.id}
+              session={session}
+              isOpen={openSessionId === session.id}
+              signups={signupsBySession[session.id] || []}
+              onRegister={signup}
+              onToggle={toggleSignups}
             />
-            <button
-              onClick={() => signup(s.id)}
-              disabled={isFull}
-              style={{ marginLeft: "0.5rem" }}
-            >
-              {isFull ? "Full" : "Join"}
-            </button>
-          </div>
-        );
-      })}
+          ))}
+        </div>
+
+        <div className="footer">
+          <span>Serverless: API Gateway · Lambda · DynamoDB</span>
+        </div>
+      </div>
     </div>
   );
 }
