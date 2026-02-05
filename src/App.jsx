@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import "./App.css";
 import TopBar from "./components/TopBar";
@@ -28,6 +29,7 @@ function LoadingSkeleton() {
     </div>
   );
 }
+
 
 export default function App() {
   const [groupId, setGroupId] = useState("test");
@@ -60,7 +62,7 @@ export default function App() {
         />
 
         <Toast toast={toast} onClose={clearToast} />
-
+          
         <div className="grid">
           {sessions.map((session) => (
             <SessionCard
