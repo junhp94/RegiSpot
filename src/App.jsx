@@ -5,7 +5,6 @@ import TopBar from "./components/TopBar";
 import Toast from "./components/Toast";
 import SessionCard from "./components/SessionCard";
 import useSessions from "./hooks/useSessions";
-
 function LoadingSkeleton() {
   return (
     <div className="page">
@@ -32,7 +31,7 @@ function LoadingSkeleton() {
 
 
 export default function App() {
-  const [groupId, setGroupId] = useState("test");
+  const [groupId, setGroupId] = useState("");
 
   const {
     sessions,
@@ -42,6 +41,7 @@ export default function App() {
     openSessionId,
     signupsBySession,
     toast,
+    setToast,
     signup,
     toggleSignups,
     clearToast,
@@ -59,10 +59,18 @@ export default function App() {
           setGroupId={setGroupId}
           name={name}
           setName={setName}
+          setToast={setToast}
         />
 
         <Toast toast={toast} onClose={clearToast} />
-          
+
+        {!groupId && (
+          <div className="welcome-section">
+            <h2>Welcome to RegiSpot</h2>
+            <p>Create or join a session group to get started.</p>
+          </div>
+        )}
+
         <div className="grid">
           {sessions.map((session) => (
             <SessionCard

@@ -292,3 +292,101 @@ body {
   margin: 10px 0;
 }
 .skeleton-line.short{ width: 55%; }
+
+/* Auth styles */
+.auth-container{
+  display: flex;
+  align-items: center;
+  margin-left: auto;
+  margin-right: 16px;
+}
+
+.auth-section{
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.user-email{
+  font-size: 13px;
+  color: var(--muted);
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.auth-button{
+  height: 36px;
+  padding: 0 16px;
+  border-radius: 10px;
+  border: 1px solid rgba(37,99,235,0.25);
+  background: rgba(37,99,235,0.10);
+  color: var(--primary);
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.auth-button:hover{
+  background: rgba(37,99,235,0.18);
+}
+
+.auth-button.loading{
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* Group Panel */
+.group-panel{
+  min-width: 0;
+}
+
+.group-mode-buttons{
+  display: flex;
+  gap: 8px;
+}
+
+.btn-back{
+  font-size: 12px;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(15,23,42,0.12);
+  background: rgba(255,255,255,0.55);
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--muted);
+}
+.btn-back:hover{
+  background: rgba(15,23,42,0.06);
+}
+
+.group-active{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.group-active-label{
+  font-size: 13px;
+  color: var(--text);
+}
+
+/* Welcome section */
+.welcome-section{
+  text-align: center;
+  padding: 48px 16px;
+  color: var(--muted);
+}
+.welcome-section h2{
+  font-size: 24px;
+  font-weight: 750;
+  color: var(--text);
+  margin: 0 0 8px;
+}
+.welcome-section p{
+  font-size: 15px;
+  margin: 0;
+}
