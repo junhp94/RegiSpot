@@ -1,4 +1,7 @@
-export default function TopBar({ groupId, setGroupId, name, setName }) {
+import AuthButton from "./AuthButton";
+import GroupPanel from "./GroupPanel";
+
+export default function TopBar({ groupId, setGroupId, name, setName, setToast }) {
   return (
     <div className="topbar">
       <div className="brand">
@@ -9,28 +12,32 @@ export default function TopBar({ groupId, setGroupId, name, setName }) {
         </div>
       </div>
 
-      <div className="nameBox">
-        <label className="label">Group ID</label>
-        <div className="nameRow" style={{ marginBottom: "10px" }}>
-          <input
-            className="input"
-            placeholder="e.g., test"
-            value={groupId}
-            onChange={(e) => setGroupId(e.target.value)}
-          />
-          <span className="hint">Which club</span>
-        </div>
+      <div className="auth-container">
+        <AuthButton />
+      </div>
 
-        <label className="label">Your name</label>
-        <div className="nameRow">
-          <input
-            className="input"
-            placeholder="e.g., Jun"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
+      <div className="nameBox">
+          <GroupPanel
+            groupId={groupId}
+            setGroupId={setGroupId}
+            setToast={setToast}
           />
-          <span className="hint">Used to register</span>
-        </div>
+
+          {groupId && (
+            <>
+              <div style={{ marginTop: 10 }} />
+              <label className="label">Your name</label>
+              <div className="nameRow">
+                <input
+                  className="input"
+                  placeholder="e.g., Jun"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                />
+                <span className="hint">Used to register</span>
+              </div>
+            </>
+          )}
       </div>
     </div>
   );

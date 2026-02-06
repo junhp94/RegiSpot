@@ -7,6 +7,10 @@ const {
   conflict,
   serverError,
   parseBody,
+  isValidGroupId,
+  isValidSessionId,
+  isValidName,
+  getAuthUser,
 } = require("./lib/utils");
 
 exports.handler = async (event) => {
@@ -14,19 +18,37 @@ exports.handler = async (event) => {
   const groupId = event.pathParameters?.groupId;
   const sessionId = event.pathParameters?.sessionId;
 
-  const { name } = parseBody(event.body);
-  const cleanName = (name || "").trim();
-  const lower = cleanName.toLowerCase();
-
+  // Validate path parameters
   if (!groupId) {
     return badRequest("Missing groupId");
+  }
+  if (!isValidGroupId(groupId)) {
+    return badRequest("Invalid groupId format");
   }
   if (!sessionId) {
     return badRequest("Missing sessionId");
   }
+  if (!isValidSessionId(sessionId)) {
+    return badRequest("Invalid sessionId format");
+  }
+
+  // Parse and validate body
+  const { name } = parseBody(event.body);
+  const cleanName = (name || "").trim();
+
   if (!cleanName) {
     return badRequest("Name is required");
   }
+  if (!isValidName(cleanName)) {
+    return badRequest("Invalid name format");
+  }
+
+  const lower = cleanName.toLowerCase();
+
+  // Get authenticated user info from Cognito
+  const authUser = getAuthUser(event);
+  const userId = authUser?.userId || null;
+  const userEmail = authUser?.email || null;
 
   const pk = `GROUP#${groupId}`;
   const sessionKey = { PK: pk, SK: `SESSION#${sessionId}` };
@@ -47,7 +69,13 @@ exports.handler = async (event) => {
           {
             Put: {
               TableName,
-              Item: { ...signupKey, name: cleanName, createdAt: now },
+              Item: {
+                ...signupKey,
+                name: cleanName,
+                createdAt: now,
+                userId,
+                userEmail,
+              },
               ConditionExpression:
                 "attribute_not_exists(PK) AND attribute_not_exists(SK)",
             },

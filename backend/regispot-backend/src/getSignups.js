@@ -1,5 +1,5 @@
 const { QueryCommand } = require("@aws-sdk/lib-dynamodb");
-const { ddb, ok, badRequest, serverError } = require("./lib/utils");
+const { ddb, ok, badRequest, serverError, isValidGroupId, isValidSessionId } = require("./lib/utils");
 
 exports.handler = async (event) => {
   const TableName = process.env.TABLE_NAME;
@@ -9,8 +9,14 @@ exports.handler = async (event) => {
   if (!groupId) {
     return badRequest("Missing groupId");
   }
+  if (!isValidGroupId(groupId)) {
+    return badRequest("Invalid groupId format");
+  }
   if (!sessionId) {
     return badRequest("Missing sessionId");
+  }
+  if (!isValidSessionId(sessionId)) {
+    return badRequest("Invalid sessionId format");
   }
 
   try {

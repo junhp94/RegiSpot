@@ -1,29 +1,57 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { getSessions, signup as apiSignup, getSignups } from "../api";
+import { useAuth } from "../auth/useAuth";
 
 export default function useSessions(groupId) {
+  const { accessToken, isAuthenticated, user } = useAuth();
+
   const [sessions, setSessions] = useState([]);
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(true);
   const [openSessionId, setOpenSessionId] = useState(null);
   const [signupsBySession, setSignupsBySession] = useState({});
   const [toast, setToast] = useState(null);
+  const didPrefillName = useRef(false);
 
   const nameTrimmed = useMemo(() => name.trim(), [name]);
 
+  // Pre-fill name from Cognito user profile (only once)
   useEffect(() => {
-    if (!groupId.trim()) return;
+    if (user?.name && !didPrefillName.current) {
+      setName(user.name);
+      didPrefillName.current = true;
+    }
+  }, [user?.name]);
+
+  useEffect(() => {
+    if (!groupId.trim()) {
+      setLoading(false);
+      return;
+    }
+    if (!isAuthenticated) {
+      setLoading(false);
+      return;
+    }
 
     let cancelled = false;
 
     async function fetchSessions() {
       setLoading(true);
-      const data = await getSessions(groupId);
-      if (!cancelled) {
-        setSessions(data);
-        setOpenSessionId(null);
-        setSignupsBySession({});
-        setLoading(false);
+      try {
+        const data = await getSessions(groupId, accessToken);
+        if (!cancelled) {
+          setSessions(data);
+          setOpenSessionId(null);
+          setSignupsBySession({});
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setToast({ type: "error", text: e.message || "Failed to load sessions." });
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     }
 
@@ -32,13 +60,19 @@ export default function useSessions(groupId) {
     return () => {
       cancelled = true;
     };
-  }, [groupId]);
+  }, [groupId, accessToken, isAuthenticated]);
 
   async function refreshSessions() {
+    if (!isAuthenticated) return;
     setLoading(true);
-    const data = await getSessions(groupId);
-    setSessions(data);
-    setLoading(false);
+    try {
+      const data = await getSessions(groupId, accessToken);
+      setSessions(data);
+    } catch (e) {
+      setToast({ type: "error", text: e.message || "Failed to refresh sessions." });
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
@@ -48,6 +82,11 @@ export default function useSessions(groupId) {
   }, [toast]);
 
   const signup = async (sessionId) => {
+    if (!isAuthenticated) {
+      setToast({ type: "error", text: "Please sign in to register." });
+      return;
+    }
+
     if (!groupId.trim()) {
       setToast({ type: "error", text: "Enter a Group ID first." });
       return;
@@ -59,12 +98,12 @@ export default function useSessions(groupId) {
     }
 
     try {
-      await apiSignup(groupId, sessionId, nameTrimmed);
+      await apiSignup(groupId, sessionId, nameTrimmed, accessToken);
       setName("");
       await refreshSessions();
 
       if (openSessionId === sessionId) {
-        const data = await getSignups(groupId, sessionId);
+        const data = await getSignups(groupId, sessionId, accessToken);
         setSignupsBySession((prev) => ({ ...prev, [sessionId]: data }));
       }
 
@@ -75,6 +114,11 @@ export default function useSessions(groupId) {
   };
 
   const toggleSignups = async (sessionId) => {
+    if (!isAuthenticated) {
+      setToast({ type: "error", text: "Please sign in to view signups." });
+      return;
+    }
+
     if (openSessionId === sessionId) {
       setOpenSessionId(null);
       return;
@@ -84,7 +128,7 @@ export default function useSessions(groupId) {
     if (signupsBySession[sessionId]) return;
 
     try {
-      const data = await getSignups(groupId, sessionId);
+      const data = await getSignups(groupId, sessionId, accessToken);
       setSignupsBySession((prev) => ({
         ...prev,
         [sessionId]: data,
@@ -104,6 +148,7 @@ export default function useSessions(groupId) {
     openSessionId,
     signupsBySession,
     toast,
+    setToast,
     signup,
     toggleSignups,
     clearToast,
