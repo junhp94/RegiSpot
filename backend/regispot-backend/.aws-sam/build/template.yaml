@@ -1,6 +1,17 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: RegiSpot backend (sessions + signup)
+Description: RegiSpot backend
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+    - dev
+    - prod
+  AllowedOrigin:
+    Type: String
+    Default: http://localhost:5173
+    Description: Allowed CORS origin (e.g., http://localhost:5173 or https://your-domain.com)
 Globals:
   Function:
     Runtime: nodejs20.x
@@ -10,11 +21,14 @@ Globals:
       Variables:
         TABLE_NAME:
           Ref: RegiSpotTable
+        ALLOWED_ORIGIN:
+          Ref: AllowedOrigin
 Resources:
   RegiSpotTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: RegiSpotTable
+      TableName:
+        Fn::Sub: RegiSpotTable-${Environment}
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
       - AttributeName: PK
@@ -32,8 +46,10 @@ Resources:
       StageName: prod
       Cors:
         AllowMethods: '''GET,POST,OPTIONS'''
-        AllowHeaders: '''content-type'''
-        AllowOrigin: '''*'''
+        AllowHeaders: '''Content-Type,Authorization,X-Api-Key'''
+        AllowOrigin:
+          Fn::Sub: '''${AllowedOrigin}'''
+        AllowCredentials: true
   GetSessionsFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -44,13 +60,6 @@ Resources:
           TableName:
             Ref: RegiSpotTable
       Events:
-        GetSessions:
-          Type: Api
-          Properties:
-            RestApiId:
-              Ref: Api
-            Path: /sessions
-            Method: GET
         GetGroupSessions:
           Type: Api
           Properties:
@@ -78,13 +87,6 @@ Resources:
             - RegiSpotTable
             - Arn
       Events:
-        Signup:
-          Type: Api
-          Properties:
-            RestApiId:
-              Ref: Api
-            Path: /sessions/{sessionId}/signup
-            Method: POST
         SignupGroup:
           Type: Api
           Properties:
@@ -104,13 +106,6 @@ Resources:
           TableName:
             Ref: RegiSpotTable
       Events:
-        GetSignups:
-          Type: Api
-          Properties:
-            RestApiId:
-              Ref: Api
-            Path: /sessions/{sessionId}/signups
-            Method: GET
         GetSignupsGroup:
           Type: Api
           Properties:
@@ -120,6 +115,44 @@ Resources:
             Method: GET
     Metadata:
       SamResourceId: GetSignupsFunction
+  CreateGroupFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: CreateGroupFunction
+      Handler: src/createGroup.handler
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: RegiSpotTable
+      Events:
+        CreateGroup:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: Api
+            Path: /groups
+            Method: POST
+    Metadata:
+      SamResourceId: CreateGroupFunction
+  VerifyGroupAdminFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: VerifyGroupAdminFunction
+      Handler: src/verifyGroupAdmin.handler
+      Policies:
+      - DynamoDBReadPolicy:
+          TableName:
+            Ref: RegiSpotTable
+      Events:
+        VerifyGroupAdmin:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: Api
+            Path: /groups/{groupId}/verify-admin
+            Method: POST
+    Metadata:
+      SamResourceId: VerifyGroupAdminFunction
 Outputs:
   ApiUrl:
     Description: API Gateway endpoint URL
