@@ -1,57 +1,63 @@
-const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
+const { GetCommand, TransactWriteCommand } = require("@aws-sdk/lib-dynamodb");
 const {
-  DynamoDBDocumentClient,
-  GetCommand,
-  TransactWriteCommand,
-} = require("@aws-sdk/lib-dynamodb");
-
-const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
-
-function cors() {
-  return {
-    "content-type": "application/json",
-    "access-control-allow-origin": "*",
-    "access-control-allow-headers": "content-type",
-    "access-control-allow-methods": "GET,POST,OPTIONS",
-  };
-}
-
-function parseJson(body) {
-  try {
-    return JSON.parse(body || "{}");
-  } catch {
-    return {};
-  }
-}
+  ddb,
+  ok,
+  badRequest,
+  notFound,
+  conflict,
+  serverError,
+  parseBody,
+  isValidGroupId,
+  isValidSessionId,
+  isValidName,
+  getAuthUser,
+} = require("./lib/utils");
 
 exports.handler = async (event) => {
   const TableName = process.env.TABLE_NAME;
-
   const groupId = event.pathParameters?.groupId;
   const sessionId = event.pathParameters?.sessionId;
 
-  const { name } = parseJson(event.body);
-  const cleanName = (name || "").trim();
-  const lower = cleanName.toLowerCase();
-
+  // Validate path parameters
   if (!groupId) {
-    return { statusCode: 400, headers: cors(), body: JSON.stringify({ error: "Missing groupId" }) };
+    return badRequest("Missing groupId");
+  }
+  if (!isValidGroupId(groupId)) {
+    return badRequest("Invalid groupId format");
   }
   if (!sessionId) {
-    return { statusCode: 400, headers: cors(), body: JSON.stringify({ error: "Missing sessionId" }) };
+    return badRequest("Missing sessionId");
   }
+  if (!isValidSessionId(sessionId)) {
+    return badRequest("Invalid sessionId format");
+  }
+
+  // Parse and validate body
+  const { name } = parseBody(event.body);
+  const cleanName = (name || "").trim();
+
   if (!cleanName) {
-    return { statusCode: 400, headers: cors(), body: JSON.stringify({ error: "Name is required" }) };
+    return badRequest("Name is required");
   }
+  if (!isValidName(cleanName)) {
+    return badRequest("Invalid name format");
+  }
+
+  const lower = cleanName.toLowerCase();
+
+  // Get authenticated user info from Cognito
+  const authUser = getAuthUser(event);
+  const userId = authUser?.userId || null;
+  const userEmail = authUser?.email || null;
 
   const pk = `GROUP#${groupId}`;
   const sessionKey = { PK: pk, SK: `SESSION#${sessionId}` };
   const signupKey = { PK: pk, SK: `SIGNUP#${sessionId}#${lower}` };
 
-  // ensure session exists
+  // Ensure session exists
   const session = await ddb.send(new GetCommand({ TableName, Key: sessionKey }));
   if (!session.Item) {
-    return { statusCode: 404, headers: cors(), body: JSON.stringify({ error: "Session not found" }) };
+    return notFound("Session not found");
   }
 
   const now = new Date().toISOString();
@@ -63,8 +69,15 @@ exports.handler = async (event) => {
           {
             Put: {
               TableName,
-              Item: { ...signupKey, name: cleanName, createdAt: now },
-              ConditionExpression: "attribute_not_exists(PK) AND attribute_not_exists(SK)",
+              Item: {
+                ...signupKey,
+                name: cleanName,
+                createdAt: now,
+                userId,
+                userEmail,
+              },
+              ConditionExpression:
+                "attribute_not_exists(PK) AND attribute_not_exists(SK)",
             },
           },
           {
@@ -88,12 +101,15 @@ exports.handler = async (event) => {
     );
   } catch (e) {
     const n = e?.name || "";
-    if (n.includes("TransactionCanceled") || n.includes("ConditionalCheckFailed")) {
-      return { statusCode: 409, headers: cors(), body: JSON.stringify({ error: "Duplicate signup or session full" }) };
+    if (
+      n.includes("TransactionCanceled") ||
+      n.includes("ConditionalCheckFailed")
+    ) {
+      return conflict("Duplicate signup or session full");
     }
-    console.error(e);
-    return { statusCode: 500, headers: cors(), body: JSON.stringify({ error: "Server error" }) };
+    console.error("signup error:", e);
+    return serverError();
   }
 
-  return { statusCode: 200, headers: cors(), body: JSON.stringify({ success: true }) };
+  return ok({ success: true });
 };
