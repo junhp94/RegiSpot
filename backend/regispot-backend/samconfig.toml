@@ -16,6 +16,7 @@ lint = true
 capabilities = "CAPABILITY_IAM"
 confirm_changeset = true
 resolve_s3 = true
+parameter_overrides = "AllowedOrigin=https://d3drhebc0ddq5m.cloudfront.net Environment=prod UserPoolId=us-east-1_UVIOYHcQC"
 
 [default.package.parameters]
 resolve_s3 = true

@@ -17,6 +17,7 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [accessToken, setAccessToken] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [pendingUsername, setPendingUsername] = useState(null);
 
   useEffect(() => {
     checkAuth();
@@ -26,7 +27,7 @@ export function AuthProvider({ children }) {
     try {
       const currentUser = await getCurrentUser();
       const session = await fetchAuthSession();
-      const token = session.tokens?.accessToken?.toString();
+      const token = session.tokens?.idToken?.toString();
 
       setUser({
         userId: currentUser.userId,
@@ -54,16 +55,20 @@ export function AuthProvider({ children }) {
   }
 
   async function register(email, password, name) {
+    const username = crypto.randomUUID();
     const result = await signUp({
-      username: email,
+      username,
       password,
       options: { userAttributes: { email, name } },
     });
+    setPendingUsername(username);
     return result;
   }
 
   async function confirmAccount(email, code) {
-    const result = await confirmSignUp({ username: email, confirmationCode: code });
+    const username = pendingUsername || email;
+    const result = await confirmSignUp({ username, confirmationCode: code });
+    setPendingUsername(null);
     return result;
   }
 
