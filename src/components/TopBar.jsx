@@ -1,43 +1,38 @@
+import { Link } from "react-router-dom";
 import AuthButton from "./AuthButton";
-import GroupPanel from "./GroupPanel";
+import { useThemeContext } from "../hooks/useThemeContext";
 
-export default function TopBar({ groupId, setGroupId, name, setName, setToast }) {
+export default function TopBar() {
+  const { resolved, toggle } = useThemeContext();
+
   return (
-    <div className="topbar">
-      <div className="brand">
-        <div className="logo">🏸</div>
-        <div>
-          <div className="title">RegiSpot</div>
-          <div className="subtitle">Register for a badminton session</div>
+    <div className="flex items-end justify-between gap-4 mb-4 flex-wrap">
+      <Link
+        to="/dashboard"
+        className="flex items-center gap-3 no-underline text-inherit"
+      >
+        <div className="w-11 h-11 rounded-[14px] grid place-items-center bg-white/70 dark:bg-slate-700/60 border border-slate-900/10 dark:border-slate-400/15 shadow-md shadow-slate-900/8">
+          🏸
         </div>
-      </div>
+        <div>
+          <div className="text-[22px] font-bold tracking-tight text-slate-900 dark:text-slate-100">
+            RegiSpot
+          </div>
+          <div className="text-[13px] text-slate-900/65 dark:text-slate-400 mt-0.5">
+            Group session registration
+          </div>
+        </div>
+      </Link>
 
-      <div className="auth-container">
+      <div className="flex items-center gap-3 ml-auto mr-4">
+        <button
+          onClick={toggle}
+          className="w-9 h-9 rounded-[10px] border border-slate-900/10 dark:border-slate-400/15 bg-white/55 dark:bg-slate-700/50 cursor-pointer flex items-center justify-center text-lg transition-all hover:bg-white/80 dark:hover:bg-slate-700/70"
+          title={resolved === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+        >
+          {resolved === "dark" ? "☀️" : "🌙"}
+        </button>
         <AuthButton />
-      </div>
-
-      <div className="nameBox">
-          <GroupPanel
-            groupId={groupId}
-            setGroupId={setGroupId}
-            setToast={setToast}
-          />
-
-          {groupId && (
-            <>
-              <div style={{ marginTop: 10 }} />
-              <label className="label">Your name</label>
-              <div className="nameRow">
-                <input
-                  className="input"
-                  placeholder="e.g., Jun"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                />
-                <span className="hint">Used to register</span>
-              </div>
-            </>
-          )}
       </div>
     </div>
   );
