@@ -48,9 +48,42 @@ function App() {
   }
 
   return (
-    <div>
-      <button onClick={() => auth.signinRedirect()}>Sign in</button>
-      <button onClick={() => signOutRedirect()}>Sign out</button>
+    <div className="page">
+      <div className="shell">
+        <TopBar
+          groupId={groupId}
+          setGroupId={setGroupId}
+          name={name}
+          setName={setName}
+          setToast={setToast}
+        />
+
+        <Toast toast={toast} onClose={clearToast} />
+
+        {!groupId && (
+          <div className="welcome-section">
+            <h2>Welcome to RegiSpot</h2>
+            <p>Create or join a session group to get started.</p>
+          </div>
+        )}
+
+        <div className="grid">
+          {sessions.map((session) => (
+            <SessionCard
+              key={session.id}
+              session={session}
+              isOpen={openSessionId === session.id}
+              signups={signupsBySession[session.id] || []}
+              onRegister={signup}
+              onToggle={toggleSignups}
+            />
+          ))}
+        </div>
+
+        <div className="footer">
+          <span>Serverless: API Gateway · Lambda · DynamoDB</span>
+        </div>
+      </div>
     </div>
   );
 }
