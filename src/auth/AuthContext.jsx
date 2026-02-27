@@ -1,7 +1,9 @@
 import { useState, useEffect } from "react";
 import { Amplify } from "aws-amplify";
 import {
-  signInWithRedirect,
+  signIn as amplifySignIn,
+  signUp,
+  confirmSignUp,
   signOut,
   getCurrentUser,
   fetchAuthSession,
@@ -9,7 +11,6 @@ import {
 import { authConfig } from "./config";
 import { AuthContext } from "./context";
 
-// Configure Amplify
 Amplify.configure(authConfig);
 
 export function AuthProvider({ children }) {
@@ -28,6 +29,7 @@ export function AuthProvider({ children }) {
       const token = session.tokens?.accessToken?.toString();
 
       setUser({
+        userId: currentUser.userId,
         username: currentUser.username,
         email: session.tokens?.idToken?.payload?.email,
         name:
@@ -36,7 +38,6 @@ export function AuthProvider({ children }) {
       });
       setAccessToken(token);
     } catch {
-      // Not authenticated
       setUser(null);
       setAccessToken(null);
     } finally {
@@ -44,12 +45,26 @@ export function AuthProvider({ children }) {
     }
   }
 
-  async function login() {
-    try {
-      await signInWithRedirect();
-    } catch (err) {
-      console.error("Login error:", err);
+  async function login(email, password) {
+    const result = await amplifySignIn({ username: email, password });
+    if (result.isSignedIn) {
+      await checkAuth();
     }
+    return result;
+  }
+
+  async function register(email, password, name) {
+    const result = await signUp({
+      username: email,
+      password,
+      options: { userAttributes: { email, name } },
+    });
+    return result;
+  }
+
+  async function confirmAccount(email, code) {
+    const result = await confirmSignUp({ username: email, confirmationCode: code });
+    return result;
   }
 
   async function logout() {
@@ -67,6 +82,8 @@ export function AuthProvider({ children }) {
     accessToken,
     loading,
     login,
+    register,
+    confirmAccount,
     logout,
     isAuthenticated: !!user,
   };
