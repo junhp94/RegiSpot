@@ -11,9 +11,16 @@
   },
   "dependencies": {
     "@aws-amplify/auth": "^6.18.0",
+    "@tailwindcss/vite": "^4.2.0",
     "aws-amplify": "^6.16.0",
+    "ejs": "^4.0.1",
+    "express": "^5.2.1",
+    "express-session": "^1.19.0",
+    "openid-client": "^5.7.1",
     "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "react-dom": "^19.2.0",
+    "react-router-dom": "^7.13.0",
+    "tailwindcss": "^4.2.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

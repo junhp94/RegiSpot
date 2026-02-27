@@ -1,5 +1,5 @@
 const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
-const { DynamoDBDocumentClient } = require("@aws-sdk/lib-dynamodb");
+const { DynamoDBDocumentClient, GetCommand } = require("@aws-sdk/lib-dynamodb");
 const bcrypt = require("bcryptjs");
 
 // DynamoDB client singleton
@@ -14,7 +14,7 @@ function corsHeaders() {
     "Content-Type": "application/json",
     "Access-Control-Allow-Origin": ALLOWED_ORIGIN,
     "Access-Control-Allow-Headers": "Content-Type,Authorization,X-Api-Key",
-    "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+    "Access-Control-Allow-Methods": "GET,POST,DELETE,OPTIONS",
     "Access-Control-Allow-Credentials": "true",
   };
 }
@@ -92,17 +92,15 @@ function parseBody(body) {
 // Remove control characters, trim, and limit length
 function sanitizeString(input, maxLength = 100) {
   if (typeof input !== "string") return "";
-  // Remove control characters (0x00-0x1F and 0x7F-0x9F)
   const cleaned = input.replace(/[\x00-\x1F\x7F-\x9F]/g, "");
   return cleaned.trim().slice(0, maxLength);
 }
 
-// Validate name: letters, spaces, hyphens, apostrophes (2-50 chars)
+// Validate name: letters, spaces, hyphens, apostrophes (1-50 chars)
 function isValidName(name) {
   if (typeof name !== "string") return false;
   const trimmed = name.trim();
   if (trimmed.length < 1 || trimmed.length > 50) return false;
-  // Allow letters (including unicode), spaces, hyphens, apostrophes
   return /^[\p{L}\s'-]+$/u.test(trimmed);
 }
 
@@ -120,6 +118,44 @@ function isValidSessionId(sessionId) {
   return /^[a-zA-Z0-9_-]+$/.test(sessionId);
 }
 
+// Validate 6-digit access code
+function isValidAccessCode(code) {
+  if (typeof code !== "string") return false;
+  return /^\d{6}$/.test(code.trim());
+}
+
+// Validate nickname: letters, numbers, spaces, hyphens (1-30 chars)
+function isValidNickname(nickname) {
+  if (typeof nickname !== "string") return false;
+  const trimmed = nickname.trim();
+  if (trimmed.length < 1 || trimmed.length > 30) return false;
+  return /^[\p{L}\d\s'-]+$/u.test(trimmed);
+}
+
+// Validate sport type
+const VALID_SPORT_TYPES = ["badminton", "tennis", "basketball", "volleyball", "soccer", "other"];
+function isValidSportType(sportType) {
+  return typeof sportType === "string" && VALID_SPORT_TYPES.includes(sportType.toLowerCase());
+}
+
+// Sport-specific validation helpers
+const VALID_MATCH_FORMATS = ["singles", "doubles", "mixed_doubles", "any"];
+function isValidMatchFormat(format) {
+  return typeof format === "string" && VALID_MATCH_FORMATS.includes(format);
+}
+
+const VALID_SKILL_LEVELS = ["beginner", "intermediate", "advanced", "all"];
+function isValidSkillLevel(level) {
+  return typeof level === "string" && VALID_SKILL_LEVELS.includes(level);
+}
+
+const RACKET_SPORTS = ["badminton", "tennis"];
+
+// Generate a random 6-digit access code
+function generateAccessCode() {
+  return String(Math.floor(100000 + Math.random() * 900000));
+}
+
 // ============================================
 // Auth Helpers
 // ============================================
@@ -134,6 +170,22 @@ function getAuthUser(event) {
     email: claims.email,
     name: claims.name || claims.email?.split("@")[0],
   };
+}
+
+// ============================================
+// Membership Helpers
+// ============================================
+
+// Look up a user's membership in a group
+async function getMembership(groupId, userId) {
+  const TableName = process.env.TABLE_NAME;
+  const result = await ddb.send(
+    new GetCommand({
+      TableName,
+      Key: { PK: `GROUP#${groupId}`, SK: `MEMBER#${userId}` },
+    })
+  );
+  return result.Item || null;
 }
 
 // ============================================
@@ -169,8 +221,19 @@ module.exports = {
   isValidName,
   isValidGroupId,
   isValidSessionId,
+  isValidAccessCode,
+  isValidNickname,
+  isValidSportType,
+  VALID_SPORT_TYPES,
+  generateAccessCode,
   getAuthUser,
+  getMembership,
   isValidGroupPassword,
   hashPassword,
   verifyPassword,
+  VALID_MATCH_FORMATS,
+  isValidMatchFormat,
+  VALID_SKILL_LEVELS,
+  isValidSkillLevel,
+  RACKET_SPORTS,
 };

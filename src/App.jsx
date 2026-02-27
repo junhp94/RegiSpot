@@ -1,53 +1,50 @@
-import { useState } from "react";
-import "./App.css";
-import TopBar from "./components/TopBar";
-import Toast from "./components/Toast";
-import SessionCard from "./components/SessionCard";
-import useSessions from "./hooks/useSessions";
-function LoadingSkeleton() {
-  return (
-    <div className="page">
-      <div className="shell">
-        <div className="topbar">
-          <div className="brand">
-            <div className="logo">🏸</div>
-            <div>
-              <div className="title">RegiSpot</div>
-              <div className="subtitle">Badminton session signup</div>
-            </div>
-          </div>
-        </div>
+import { Routes, Route, Navigate } from "react-router-dom";
+import { useAuth } from "react-oidc-context";
+import LoginPage from "./pages/LoginPage";
+import SignupPage from "./pages/SignupPage";
+import JoinPage from "./pages/JoinPage";
+import DashboardPage from "./pages/DashboardPage";
+import GroupPage from "./pages/GroupPage";
+import ProtectedRoute from "./components/ProtectedRoute";
+import AppLayout from "./components/AppLayout";
 
-        <div className="card">
-          <div className="skeleton-line" />
-          <div className="skeleton-line short" />
-          <div className="skeleton-line" />
-        </div>
-      </div>
-    </div>
-  );
-}
+function App() {
+  const auth = useAuth();
 
+  const signOutRedirect = () => {
+    const clientId = "62n6es0a6pcanj4sakpirvenlc";
+    const logoutUri = "http://localhost:5173";
+    const cognitoDomain = "https://us-east-1uvioyhcqc.auth.us-east-1.amazoncognito.com";
+    window.location.href = `${cognitoDomain}/logout?client_id=${clientId}&logout_uri=${encodeURIComponent(logoutUri)}`;
+  };
 
-export default function App() {
-  const [groupId, setGroupId] = useState("");
+  if (auth.isLoading) {
+    return <div>Loading...</div>;
+  }
 
-  const {
-    sessions,
-    name,
-    setName,
-    loading,
-    openSessionId,
-    signupsBySession,
-    toast,
-    setToast,
-    signup,
-    toggleSignups,
-    clearToast,
-  } = useSessions(groupId);
+  if (auth.error) {
+    return <div>Encountering error... {auth.error.message}</div>;
+  }
 
-  if (loading) {
-    return <LoadingSkeleton />;
+  if (auth.isAuthenticated) {
+    return (
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/signup" element={<SignupPage />} />
+        <Route path="/join/:accessCode" element={<JoinPage />} />
+        <Route
+          element={
+            <ProtectedRoute>
+              <AppLayout />
+            </ProtectedRoute>
+          }
+        >
+          <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/groups/:groupId" element={<GroupPage />} />
+        </Route>
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      </Routes>
+    );
   }
 
   return (
@@ -90,3 +87,5 @@ export default function App() {
     </div>
   );
 }
+
+export default App;

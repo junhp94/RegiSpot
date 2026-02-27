@@ -6,49 +6,46 @@ const {
   unauthorized,
   forbidden,
   serverError,
-  isValidGroupId,
-  isValidSessionId,
   getAuthUser,
+  isValidGroupId,
   getMembership,
 } = require("./lib/utils");
 
 exports.handler = async (event) => {
   const TableName = process.env.TABLE_NAME;
   const groupId = event.pathParameters?.groupId;
-  const sessionId = event.pathParameters?.sessionId;
 
   if (!isValidGroupId(groupId)) return badRequest("Invalid groupId");
-  if (!isValidSessionId(sessionId)) return badRequest("Invalid sessionId");
 
   const authUser = getAuthUser(event);
   if (!authUser) return unauthorized("Authentication required");
+  const { userId } = authUser;
 
-  const membership = await getMembership(groupId, authUser.userId);
+  const membership = await getMembership(groupId, userId);
   if (!membership) return forbidden("You are not a member of this group");
 
   try {
-    const pk = `GROUP#${groupId}`;
-    const prefix = `SIGNUP#${sessionId}#`;
-
-    const res = await ddb.send(
+    const result = await ddb.send(
       new QueryCommand({
         TableName,
-        KeyConditionExpression: "PK = :pk AND begins_with(SK, :p)",
+        KeyConditionExpression: "PK = :pk AND begins_with(SK, :prefix)",
         ExpressionAttributeValues: {
-          ":pk": pk,
-          ":p": prefix,
+          ":pk": `GROUP#${groupId}`,
+          ":prefix": "MEMBER#",
         },
       })
     );
 
-    const signups = (res.Items || []).map((x) => ({
-      name: x.nickname || x.name,
-      signedUpAt: x.signedUpAt || x.createdAt,
+    const members = (result.Items || []).map((item) => ({
+      userId: item.userId,
+      nickname: item.nickname,
+      role: item.role,
+      joinedAt: item.joinedAt,
     }));
 
-    return ok(signups);
+    return ok(members);
   } catch (e) {
-    console.error("getSignups error:", e);
+    console.error("getMembers error:", e);
     return serverError();
   }
 };

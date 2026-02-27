@@ -52,7 +52,7 @@ Resources:
     Properties:
       StageName: prod
       Cors:
-        AllowMethods: "'GET,POST,OPTIONS'"
+        AllowMethods: "'GET,POST,DELETE,OPTIONS'"
         AllowHeaders: "'Content-Type,Authorization,X-Api-Key'"
         AllowOrigin: !Sub "'${AllowedOrigin}'"
         AllowCredentials: true
@@ -60,6 +60,85 @@ Resources:
   # ============================================
   # Lambda Functions
   # ============================================
+
+  # --- Group Management ---
+  CreateGroupFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      Handler: src/createGroup.handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref RegiSpotTable
+        - Statement:
+            Effect: Allow
+            Action:
+              - dynamodb:TransactWriteItems
+            Resource:
+              - !GetAtt RegiSpotTable.Arn
+      Events:
+        CreateGroup:
+          Type: Api
+          Properties:
+            RestApiId: !Ref Api
+            Path: /groups
+            Method: POST
+
+  JoinGroupFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      Handler: src/joinGroup.handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref RegiSpotTable
+        - Statement:
+            Effect: Allow
+            Action:
+              - dynamodb:TransactWriteItems
+            Resource:
+              - !GetAtt RegiSpotTable.Arn
+      Events:
+        JoinGroup:
+          Type: Api
+          Properties:
+            RestApiId: !Ref Api
+            Path: /groups/join
+            Method: POST
+
+  GetGroupFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      Handler: src/getGroup.handler
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref RegiSpotTable
+      Events:
+        GetGroup:
+          Type: Api
+          Properties:
+            RestApiId: !Ref Api
+            Path: /groups/{groupId}
+            Method: GET
+
+  GetUserGroupsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      Handler: src/getUserGroups.handler
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref RegiSpotTable
+      Events:
+        GetUserGroups:
+          Type: Api
+          Properties:
+            RestApiId: !Ref Api
+            Path: /users/me/groups
+            Method: GET
+
+  # --- Sessions ---
   GetSessionsFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -76,6 +155,39 @@ Resources:
             Path: /groups/{groupId}/sessions
             Method: GET
 
+  CreateSessionFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      Handler: src/createSession.handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref RegiSpotTable
+      Events:
+        CreateSession:
+          Type: Api
+          Properties:
+            RestApiId: !Ref Api
+            Path: /groups/{groupId}/sessions
+            Method: POST
+
+  DeleteSessionFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      Handler: src/deleteSession.handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref RegiSpotTable
+      Events:
+        DeleteSession:
+          Type: Api
+          Properties:
+            RestApiId: !Ref Api
+            Path: /groups/{groupId}/sessions/{sessionId}
+            Method: DELETE
+
+  # --- Signups ---
   SignupFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -114,36 +226,65 @@ Resources:
             Path: /groups/{groupId}/sessions/{sessionId}/signups
             Method: GET
 
-  CreateGroupFunction:
+  # --- Members ---
+  GetMembersFunction:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: .
-      Handler: src/createGroup.handler
-      Policies:
-        - DynamoDBCrudPolicy:
-            TableName: !Ref RegiSpotTable
-      Events:
-        CreateGroup:
-          Type: Api
-          Properties:
-            RestApiId: !Ref Api
-            Path: /groups
-            Method: POST
-
-  VerifyGroupAdminFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: .
-      Handler: src/verifyGroupAdmin.handler
+      Handler: src/getMembers.handler
       Policies:
         - DynamoDBReadPolicy:
             TableName: !Ref RegiSpotTable
       Events:
-        VerifyGroupAdmin:
+        GetMembers:
           Type: Api
           Properties:
             RestApiId: !Ref Api
-            Path: /groups/{groupId}/verify-admin
+            Path: /groups/{groupId}/members
+            Method: GET
+
+  KickMemberFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      Handler: src/kickMember.handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref RegiSpotTable
+        - Statement:
+            Effect: Allow
+            Action:
+              - dynamodb:TransactWriteItems
+            Resource:
+              - !GetAtt RegiSpotTable.Arn
+      Events:
+        KickMember:
+          Type: Api
+          Properties:
+            RestApiId: !Ref Api
+            Path: /groups/{groupId}/members/{userId}
+            Method: DELETE
+
+  LeaveGroupFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      Handler: src/leaveGroup.handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref RegiSpotTable
+        - Statement:
+            Effect: Allow
+            Action:
+              - dynamodb:TransactWriteItems
+            Resource:
+              - !GetAtt RegiSpotTable.Arn
+      Events:
+        LeaveGroup:
+          Type: Api
+          Properties:
+            RestApiId: !Ref Api
+            Path: /groups/{groupId}/members/leave
             Method: POST
 
 # ============================================
