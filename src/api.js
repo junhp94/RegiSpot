@@ -4,7 +4,7 @@ const API_BASE =
 
 async function readJson(res, fallback) {
   const data = await res.json().catch(() => fallback);
-  if (!res.ok) throw new Error(data?.error || "Request failed");
+  if (!res.ok) throw new Error(data?.error || data?.message || "Request failed");
   return data;
 }
 
