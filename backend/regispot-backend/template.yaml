@@ -13,6 +13,10 @@ Parameters:
     Type: String
     Default: http://localhost:5173
     Description: Allowed CORS origin (e.g., http://localhost:5173 or https://your-domain.com)
+  UserPoolId:
+    Type: String
+    Default: us-east-1_UVIOYHcQC
+    Description: Cognito User Pool ID
 
 Globals:
   Function:
@@ -56,6 +60,12 @@ Resources:
         AllowHeaders: "'Content-Type,Authorization,X-Api-Key'"
         AllowOrigin: !Sub "'${AllowedOrigin}'"
         AllowCredentials: true
+      Auth:
+        DefaultAuthorizer: CognitoAuthorizer
+        AddDefaultAuthorizerToCorsPreflight: false
+        Authorizers:
+          CognitoAuthorizer:
+            UserPoolArn: !Sub "arn:aws:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/${UserPoolId}"
 
   # ============================================
   # Lambda Functions
@@ -286,6 +296,31 @@ Resources:
             RestApiId: !Ref Api
             Path: /groups/{groupId}/members/leave
             Method: POST
+
+# ============================================
+# Gateway Responses (add CORS headers to auth errors)
+# ============================================
+  GatewayResponseUnauthorized:
+    Type: AWS::ApiGateway::GatewayResponse
+    Properties:
+      ResponseParameters:
+        gatewayresponse.header.Access-Control-Allow-Origin: !Sub "'${AllowedOrigin}'"
+        gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Api-Key'"
+        gatewayresponse.header.Access-Control-Allow-Credentials: "'true'"
+      ResponseType: UNAUTHORIZED
+      RestApiId: !Ref Api
+      StatusCode: '401'
+
+  GatewayResponseAccessDenied:
+    Type: AWS::ApiGateway::GatewayResponse
+    Properties:
+      ResponseParameters:
+        gatewayresponse.header.Access-Control-Allow-Origin: !Sub "'${AllowedOrigin}'"
+        gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Api-Key'"
+        gatewayresponse.header.Access-Control-Allow-Credentials: "'true'"
+      ResponseType: ACCESS_DENIED
+      RestApiId: !Ref Api
+      StatusCode: '403'
 
 # ============================================
 # Outputs
