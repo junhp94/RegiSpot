@@ -220,6 +220,28 @@ Resources:
             Path: /groups/{groupId}/sessions/{sessionId}/signup
             Method: POST
 
+  UnregisterFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      Handler: src/unregister.handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref RegiSpotTable
+        - Statement:
+            Effect: Allow
+            Action:
+              - dynamodb:TransactWriteItems
+            Resource:
+              - !GetAtt RegiSpotTable.Arn
+      Events:
+        Unregister:
+          Type: Api
+          Properties:
+            RestApiId: !Ref Api
+            Path: /groups/{groupId}/sessions/{sessionId}/signup
+            Method: DELETE
+
   GetSignupsFunction:
     Type: AWS::Serverless::Function
     Properties:
