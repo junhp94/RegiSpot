@@ -29,6 +29,7 @@ export default function GroupPage() {
     signupsBySession,
     toast,
     signup,
+    unregister,
     createSession,
     deleteSession,
     toggleSignups,
@@ -163,6 +164,7 @@ export default function GroupPage() {
                 signups={signupsBySession[session.id] || []}
                 isOwner={isOwner}
                 onRegister={signup}
+                onUnregister={unregister}
                 onDelete={deleteSession}
                 onToggle={toggleSignups}
               />

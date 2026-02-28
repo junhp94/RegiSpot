@@ -110,6 +110,17 @@ export async function signup(groupId, sessionId, accessToken) {
   return readJson(res, {});
 }
 
+export async function unregister(groupId, sessionId, accessToken) {
+  const res = await fetch(
+    `${API_BASE}/groups/${encodeURIComponent(groupId)}/sessions/${encodeURIComponent(sessionId)}/signup`,
+    {
+      method: "DELETE",
+      headers: authHeaders(accessToken),
+    }
+  );
+  return readJson(res, {});
+}
+
 export async function getSignups(groupId, sessionId, accessToken) {
   const res = await fetch(
     `${API_BASE}/groups/${encodeURIComponent(groupId)}/sessions/${encodeURIComponent(sessionId)}/signups`,
