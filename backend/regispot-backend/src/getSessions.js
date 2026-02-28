@@ -1,4 +1,4 @@
-const { QueryCommand } = require("@aws-sdk/lib-dynamodb");
+const { QueryCommand, BatchGetCommand } = require("@aws-sdk/lib-dynamodb");
 const {
   ddb,
   ok,
@@ -51,6 +51,21 @@ exports.handler = async (event) => {
       if (x.courtCount) session.courtCount = x.courtCount;
       return session;
     });
+
+    if (sessions.length > 0) {
+      const nicknameLower = membership.nicknameLower || membership.nickname.toLowerCase();
+      const keys = sessions.map((s) => ({
+        PK: pk,
+        SK: `SIGNUP#${s.id}#${nicknameLower}`,
+      }));
+      const batchRes = await ddb.send(
+        new BatchGetCommand({ RequestItems: { [TableName]: { Keys: keys } } })
+      );
+      const registeredSet = new Set(
+        (batchRes.Responses?.[TableName] || []).map((item) => item.SK.split("#")[1])
+      );
+      sessions.forEach((s) => { s.isRegistered = registeredSet.has(s.id); });
+    }
 
     return ok(sessions);
   } catch (e) {
