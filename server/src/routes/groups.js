@@ -11,6 +11,7 @@
 import { Router } from "express";
 import { randomBytes } from "crypto";
 import pool from "../lib/db.js";
+import { canCreateGroups } from "../lib/permissions.js";
 import {
   sanitizeString,
   isValidNickname,
@@ -28,7 +29,11 @@ function randomId(len = 8) {
 // POST /groups
 groupsRouter.post("/", async (req, res) => {
   const { groupName, sportType, maxMembers, nickname } = req.body || {};
-  const { userId } = req.user;
+  const { userId, email } = req.user;
+
+  if (!canCreateGroups(email)) {
+    return res.status(403).json({ error: "Group creation is currently disabled" });
+  }
 
   const cleanName = sanitizeString(groupName, 100);
   if (!cleanName || cleanName.length < 2) {

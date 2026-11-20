@@ -16,7 +16,7 @@ export default function LoginPage() {
     e.preventDefault();
     setError("");
     if (!email.trim() || !password) {
-      setError("Email and password are required.");
+      setError("Email/username and password are required.");
       return;
     }
     setBusy(true);
@@ -56,14 +56,16 @@ export default function LoginPage() {
         {error && <div className={ERROR_BOX}>{error}</div>}
 
         <form onSubmit={handleSubmit}>
-          <label className={LABEL}>Email</label>
+          {/* type="text" so the admin can log in with a username (no @) */}
+          <label className={LABEL}>Email or username</label>
           <input
             className={INPUT}
-            type="email"
+            type="text"
             placeholder="you@example.com"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            autoComplete="email"
+            autoComplete="username"
+            autoCapitalize="none"
           />
 
           <label className={LABEL}>Password</label>

@@ -1,4 +1,6 @@
 export default function SignupsList({ signups }) {
+  // API returns { nickname, signedUpAt }
+  const nameOf = (x) => x.nickname || x.name || "?";
   return (
     <div className="mt-3">
       <div className="flex items-center justify-between mb-2.5">
@@ -16,13 +18,13 @@ export default function SignupsList({ signups }) {
           {signups.map((x, i) => (
             <div
               className="inline-flex items-center gap-2 py-2 px-2.5 rounded-full border border-slate-900/10 dark:border-slate-400/15 bg-white/70 dark:bg-slate-700/50"
-              key={`${x.name}-${i}`}
+              key={`${nameOf(x)}-${i}`}
             >
               <span className="w-[22px] h-[22px] rounded-full grid place-items-center text-xs font-extrabold text-blue-600 dark:text-blue-400 bg-blue-600/12 dark:bg-blue-500/20 border border-blue-600/18 dark:border-blue-400/25">
-                {(x.name || "?").trim().slice(0, 1).toUpperCase()}
+                {nameOf(x).trim().slice(0, 1).toUpperCase()}
               </span>
               <span className="text-[13px] font-semibold text-slate-900/82 dark:text-slate-200">
-                {x.name}
+                {nameOf(x)}
               </span>
             </div>
           ))}
