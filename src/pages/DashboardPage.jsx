@@ -7,9 +7,13 @@ import { CARD, BTN_PRIMARY, BTN_GHOST } from "../lib/styles";
 import { getSportConfig } from "../lib/sportConfig";
 import { SkeletonGrid } from "../components/Skeleton";
 import EmptyState from "../components/EmptyState";
+import { useAuth } from "../auth/useAuth";
 
 export default function DashboardPage() {
   const { groups, loading, createGroup, joinGroup } = useGroups();
+  const { user } = useAuth();
+  // Group creation is gated server-side by GROUP_CREATORS; hide the UI to match
+  const canCreate = user?.canCreateGroups !== false;
   const [showCreate, setShowCreate] = useState(false);
   const [showJoin, setShowJoin] = useState(false);
   const [sportFilter, setSportFilter] = useState(null);
@@ -43,9 +47,11 @@ export default function DashboardPage() {
           My Groups
         </h2>
         <div className="flex gap-2">
-          <button className={BTN_PRIMARY} onClick={() => setShowCreate(true)}>
-            Create Group
-          </button>
+          {canCreate && (
+            <button className={BTN_PRIMARY} onClick={() => setShowCreate(true)}>
+              Create Group
+            </button>
+          )}
           <button className={BTN_GHOST} onClick={() => setShowJoin(true)}>
             Join Group
           </button>
@@ -87,9 +93,11 @@ export default function DashboardPage() {
         <EmptyState
           icon="👋"
           title="Welcome to RegiSpot"
-          description="Create a group or join one with an access code to get started."
-          actionLabel="Create Group"
-          onAction={() => setShowCreate(true)}
+          description={canCreate
+            ? "Create a group or join one with an access code to get started."
+            : "Open the invite link from your group, or join with an access code."}
+          actionLabel={canCreate ? "Create Group" : "Join Group"}
+          onAction={() => (canCreate ? setShowCreate(true) : setShowJoin(true))}
         />
       ) : filteredGroups.length === 0 ? (
         <EmptyState
@@ -126,7 +134,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {showCreate && (
+      {showCreate && canCreate && (
         <CreateGroupModal
           onSubmit={createGroup}
           onClose={() => setShowCreate(false)}

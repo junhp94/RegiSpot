@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import {
   getSessions,
   signup as apiSignup,
+  unregister as apiUnregister,
   getSignups,
   createSession as apiCreateSession,
   deleteSession as apiDeleteSession,
@@ -67,16 +68,37 @@ export default function useSessions(groupId) {
     return () => clearTimeout(t);
   }, [toast]);
 
+  // After a register/unregister, the cached "who's registered" list is stale.
+  // Refetch it if it's open; otherwise drop it so the next open refetches.
+  async function refreshSignups(sessionId) {
+    if (openSessionId === sessionId) {
+      const data = await getSignups(groupId, sessionId, accessToken);
+      setSignupsBySession((prev) => ({ ...prev, [sessionId]: data }));
+    } else {
+      setSignupsBySession((prev) => {
+        const next = { ...prev };
+        delete next[sessionId];
+        return next;
+      });
+    }
+  }
+
   const signup = async (sessionId) => {
     try {
       await apiSignup(groupId, sessionId, accessToken);
       await refreshSessions();
+      await refreshSignups(sessionId);
+      setToast({ type: "success", text: "You're registered!" });
+    } catch (e) {
+      setToast({ type: "error", text: e.message || "Signup failed." });
+    }
+  };
 
-      if (openSessionId === sessionId) {
-        const data = await getSignups(groupId, sessionId, accessToken);
-        setSignupsBySession((prev) => ({ ...prev, [sessionId]: data }));
-      }
-
+  const unregister = async (sessionId) => {
+    try {
+      await apiUnregister(groupId, sessionId, accessToken);
+      await refreshSessions();
+      await refreshSignups(sessionId);
       setToast({ type: "success", text: "You've been unregistered." });
     } catch (e) {
       setToast({ type: "error", text: e.message || "Unregister failed." });
@@ -133,6 +155,7 @@ export default function useSessions(groupId) {
     toast,
     setToast,
     signup,
+    unregister,
     createSession,
     deleteSession: deleteSessionById,
     toggleSignups,

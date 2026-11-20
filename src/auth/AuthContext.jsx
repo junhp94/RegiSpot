@@ -19,6 +19,12 @@ import { AuthContext } from "./context";
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:3000";
 const TOKEN_KEY = "regispot-token";
 
+// canCreateGroups comes from the server (GROUP_CREATORS env); default true so an
+// older API that doesn't send the flag keeps the full feature.
+function toUser(u) {
+  return { userId: u.userId, email: u.email, name: u.name, canCreateGroups: u.canCreateGroups !== false };
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [accessToken, setAccessToken] = useState(null);
@@ -34,7 +40,7 @@ export function AuthProvider({ children }) {
     })
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((data) => {
-        setUser({ userId: data.userId, email: data.email, name: data.name });
+        setUser(toUser(data));
         setAccessToken(stored);
       })
       .catch(() => {
@@ -54,7 +60,7 @@ export function AuthProvider({ children }) {
     if (!res.ok) throw new Error(data.error || "Sign in failed");
 
     localStorage.setItem(TOKEN_KEY, data.token);
-    setUser({ userId: data.user.userId, email: data.user.email, name: data.user.name });
+    setUser(toUser(data.user));
     setAccessToken(data.token);
 
     // Return { isSignedIn: true } to match the shape LoginPage expects
@@ -72,7 +78,7 @@ export function AuthProvider({ children }) {
 
     // Auto sign-in after register — no confirmation step needed
     localStorage.setItem(TOKEN_KEY, data.token);
-    setUser({ userId: data.user.userId, email: data.user.email, name: data.user.name });
+    setUser(toUser(data.user));
     setAccessToken(data.token);
 
     return data;

@@ -9,6 +9,12 @@ import jwt from "jsonwebtoken";
 import rateLimit from "express-rate-limit";
 import pool from "../lib/db.js";
 import { sanitizeString } from "../lib/validators.js";
+import { canCreateGroups } from "../lib/permissions.js";
+
+// Public user shape returned by register/login/me
+function publicUser(id, email, name) {
+  return { userId: id, email, name, canCreateGroups: canCreateGroups(email) };
+}
 
 export const authRouter = Router();
 
@@ -56,7 +62,7 @@ authRouter.post("/register", async (req, res) => {
     );
     const user = result.rows[0];
     const token = makeToken(user);
-    res.status(201).json({ token, user: { userId: user.id, email: user.email, name: user.name } });
+    res.status(201).json({ token, user: publicUser(user.id, user.email, user.name) });
   } catch (err) {
     if (err.code === "23505") {
       return res.status(409).json({ error: "An account with that email already exists" });
@@ -91,7 +97,7 @@ authRouter.post("/login", async (req, res) => {
     }
 
     const token = makeToken(user);
-    res.json({ token, user: { userId: user.id, email: user.email, name: user.name } });
+    res.json({ token, user: publicUser(user.id, user.email, user.name) });
   } catch (err) {
     console.error("login error:", err);
     res.status(500).json({ error: "Server error" });
@@ -106,7 +112,7 @@ authRouter.get("/me", async (req, res) => {
 
   try {
     const payload = jwt.verify(token, process.env.JWT_SECRET);
-    res.json({ userId: payload.sub, email: payload.email, name: payload.name });
+    res.json(publicUser(payload.sub, payload.email, payload.name));
   } catch {
     res.status(401).json({ error: "Invalid or expired token" });
   }
