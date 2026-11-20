@@ -1,6 +1,6 @@
 const API_BASE =
   import.meta.env.VITE_API_BASE ||
-  "https://rvqmjke48k.execute-api.us-east-1.amazonaws.com/prod";
+  "http://localhost:3000";
 
 async function readJson(res, fallback) {
   const data = await res.json().catch(() => fallback);
@@ -105,17 +105,6 @@ export async function signup(groupId, sessionId, accessToken) {
       method: "POST",
       headers: authHeaders(accessToken),
       body: JSON.stringify({}),
-    }
-  );
-  return readJson(res, {});
-}
-
-export async function unregister(groupId, sessionId, accessToken) {
-  const res = await fetch(
-    `${API_BASE}/groups/${encodeURIComponent(groupId)}/sessions/${encodeURIComponent(sessionId)}/signup`,
-    {
-      method: "DELETE",
-      headers: authHeaders(accessToken),
     }
   );
   return readJson(res, {});

@@ -29,7 +29,6 @@ export default function GroupPage() {
     signupsBySession,
     toast,
     signup,
-    unregister,
     createSession,
     deleteSession,
     toggleSignups,
@@ -71,7 +70,8 @@ export default function GroupPage() {
   const sportCfg = getSportConfig(group.sportType);
 
   async function handleCopyInviteLink() {
-    const link = `${window.location.origin}/join/${group.accessCode}`;
+    const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+    const link = `${window.location.origin}${base}/join/${group.accessCode}`;
     try {
       await navigator.clipboard.writeText(link);
     } catch {
@@ -164,7 +164,6 @@ export default function GroupPage() {
                 signups={signupsBySession[session.id] || []}
                 isOwner={isOwner}
                 onRegister={signup}
-                onUnregister={unregister}
                 onDelete={deleteSession}
                 onToggle={toggleSignups}
               />

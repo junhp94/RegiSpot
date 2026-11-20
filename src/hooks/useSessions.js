@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import {
   getSessions,
   signup as apiSignup,
-  unregister as apiUnregister,
   getSignups,
   createSession as apiCreateSession,
   deleteSession as apiDeleteSession,
@@ -78,22 +77,6 @@ export default function useSessions(groupId) {
         setSignupsBySession((prev) => ({ ...prev, [sessionId]: data }));
       }
 
-      setToast({ type: "success", text: "You're registered!" });
-    } catch (e) {
-      setToast({ type: "error", text: e.message || "Signup failed." });
-    }
-  };
-
-  const unregister = async (sessionId) => {
-    try {
-      await apiUnregister(groupId, sessionId, accessToken);
-      await refreshSessions();
-
-      if (openSessionId === sessionId) {
-        const data = await getSignups(groupId, sessionId, accessToken);
-        setSignupsBySession((prev) => ({ ...prev, [sessionId]: data }));
-      }
-
       setToast({ type: "success", text: "You've been unregistered." });
     } catch (e) {
       setToast({ type: "error", text: e.message || "Unregister failed." });
@@ -150,7 +133,6 @@ export default function useSessions(groupId) {
     toast,
     setToast,
     signup,
-    unregister,
     createSession,
     deleteSession: deleteSessionById,
     toggleSignups,

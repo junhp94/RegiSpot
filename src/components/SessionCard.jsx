@@ -14,7 +14,6 @@ export default function SessionCard({
   signups,
   isOwner,
   onRegister,
-  onUnregister,
   onDelete,
   onToggle,
 }) {
@@ -62,24 +61,14 @@ export default function SessionCard({
       <div className="h-px bg-slate-900/8 dark:bg-slate-400/10 my-3" />
 
       <div className="flex gap-2.5 flex-wrap">
-        {session.isRegistered ? (
-          <button
-            className={BTN_DANGER}
-            onClick={() => onUnregister(session.id)}
-            title="Unregister from this session"
-          >
-            Unregister
-          </button>
-        ) : (
-          <button
-            className={`${BTN_PRIMARY} ${isFull ? "opacity-55 cursor-not-allowed" : ""}`}
-            onClick={() => onRegister(session.id)}
-            disabled={isFull}
-            title={isFull ? "Session is full" : "Register"}
-          >
-            Register
-          </button>
-        )}
+        <button
+          className={`${BTN_PRIMARY} ${isFull ? "opacity-55 cursor-not-allowed" : ""}`}
+          onClick={() => onRegister(session.id)}
+          disabled={isFull}
+          title={isFull ? "Session is full" : "Register"}
+        >
+          Register
+        </button>
 
         <button className={BTN_GHOST} onClick={() => onToggle(session.id)}>
           {isOpen ? "Hide registered" : "Show registered"}

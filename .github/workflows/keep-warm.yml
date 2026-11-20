@@ -1,0 +1,19 @@
+name: Keep Render warm
+
+# Render's free tier spins down after 15 min of inactivity (cold starts take ~30s).
+# This pings /health every 10 minutes to keep the service awake.
+#
+# NOTE: GitHub automatically disables scheduled workflows after 60 days of no
+# repo activity. If the app starts cold-starting again, re-enable this workflow
+# from the Actions tab, or push any small commit to reset the timer.
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping health endpoint
+        run: curl -fsS "${{ vars.API_URL }}/health"
