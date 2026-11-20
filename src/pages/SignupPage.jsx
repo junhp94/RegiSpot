@@ -4,14 +4,12 @@ import { useAuth } from "../auth/useAuth";
 import { INPUT, LABEL, BTN_PRIMARY, ERROR_BOX } from "../lib/styles";
 
 export default function SignupPage() {
-  const { register, confirmAccount, login } = useAuth();
+  const { register } = useAuth();
   const navigate = useNavigate();
 
-  const [step, setStep] = useState("register");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [code, setCode] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -29,36 +27,15 @@ export default function SignupPage() {
     setBusy(true);
     try {
       await register(email.trim(), password, name.trim());
-      setStep("confirm");
-    } catch (err) {
-      setError(err.message || "Registration failed.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handleConfirm(e) {
-    e.preventDefault();
-    setError("");
-    if (!code.trim()) {
-      setError("Confirmation code is required.");
-      return;
-    }
-    setBusy(true);
-    try {
-      await confirmAccount(email.trim(), code.trim());
-      const result = await login(email.trim(), password);
-      if (result.isSignedIn) {
-        const pendingCode = sessionStorage.getItem("regispot-pending-join");
-        if (pendingCode) {
-          sessionStorage.removeItem("regispot-pending-join");
-          navigate(`/join/${pendingCode}`, { replace: true });
-        } else {
-          navigate("/dashboard", { replace: true });
-        }
+      const pendingCode = sessionStorage.getItem("regispot-pending-join");
+      if (pendingCode) {
+        sessionStorage.removeItem("regispot-pending-join");
+        navigate(`/join/${pendingCode}`, { replace: true });
+      } else {
+        navigate("/dashboard", { replace: true });
       }
     } catch (err) {
-      setError(err.message || "Confirmation failed.");
+      setError(err.message || "Registration failed.");
     } finally {
       setBusy(false);
     }
@@ -75,68 +52,47 @@ export default function SignupPage() {
             RegiSpot
           </div>
           <p className="text-sm text-slate-900/65 dark:text-slate-400 mt-1 mb-0">
-            {step === "register" ? "Create your account" : "Confirm your email"}
+            Create your account
           </p>
         </div>
 
         {error && <div className={ERROR_BOX}>{error}</div>}
 
-        {step === "register" ? (
-          <form onSubmit={handleRegister}>
-            <label className={LABEL}>Name</label>
-            <input
-              className={INPUT}
-              type="text"
-              placeholder="Your name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              autoComplete="name"
-            />
+        <form onSubmit={handleRegister}>
+          <label className={LABEL}>Name</label>
+          <input
+            className={INPUT}
+            type="text"
+            placeholder="Your name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            autoComplete="name"
+          />
 
-            <label className={LABEL}>Email</label>
-            <input
-              className={INPUT}
-              type="email"
-              placeholder="you@example.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              autoComplete="email"
-            />
+          <label className={LABEL}>Email</label>
+          <input
+            className={INPUT}
+            type="email"
+            placeholder="you@example.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            autoComplete="email"
+          />
 
-            <label className={LABEL}>Password</label>
-            <input
-              className={INPUT}
-              type="password"
-              placeholder="Min 8 characters"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete="new-password"
-            />
+          <label className={LABEL}>Password</label>
+          <input
+            className={INPUT}
+            type="password"
+            placeholder="Min 8 characters"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            autoComplete="new-password"
+          />
 
-            <button className={`${BTN_PRIMARY} w-full mt-5 text-sm`} type="submit" disabled={busy}>
-              {busy ? "Creating account..." : "Sign Up"}
-            </button>
-          </form>
-        ) : (
-          <form onSubmit={handleConfirm}>
-            <p className="text-[13px] text-slate-900/65 dark:text-slate-400 m-0 mb-3">
-              We sent a confirmation code to <strong className="text-slate-900 dark:text-slate-100">{email}</strong>
-            </p>
-            <label className={LABEL}>Confirmation Code</label>
-            <input
-              className={INPUT}
-              type="text"
-              placeholder="Enter 6-digit code"
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              autoComplete="one-time-code"
-            />
-
-            <button className={`${BTN_PRIMARY} w-full mt-5 text-sm`} type="submit" disabled={busy}>
-              {busy ? "Confirming..." : "Confirm & Sign In"}
-            </button>
-          </form>
-        )}
+          <button className={`${BTN_PRIMARY} w-full mt-5 text-sm`} type="submit" disabled={busy}>
+            {busy ? "Creating account..." : "Sign Up"}
+          </button>
+        </form>
 
         <p className="text-center text-[13px] text-slate-900/65 dark:text-slate-400 mt-5">
           Already have an account?{" "}

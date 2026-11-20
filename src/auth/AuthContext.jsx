@@ -1,97 +1,100 @@
+/**
+ * AuthContext — replaces Cognito/Amplify with our own JWT-based auth.
+ *
+ * Why localStorage + Bearer token instead of a cookie?
+ * The frontend is on junhp94.github.io and the API is on onrender.com —
+ * two different eTLD+1 domains. Browsers treat cookies set by one domain as
+ * "third-party" on the other, and modern browsers block third-party cookies by
+ * default (Safari ITP, Chrome's Privacy Sandbox). A Bearer token in
+ * localStorage is first-party to the frontend and sent explicitly in the
+ * Authorization header, so it works regardless of browser cookie policy.
+ *
+ * The context interface is kept identical to the Cognito version:
+ * { user, accessToken, loading, login, register, logout, isAuthenticated }
+ * login() still returns { isSignedIn: true } so LoginPage keeps working.
+ */
 import { useState, useEffect } from "react";
-import { Amplify } from "aws-amplify";
-import {
-  signIn as amplifySignIn,
-  signUp,
-  confirmSignUp,
-  signOut,
-  getCurrentUser,
-  fetchAuthSession,
-} from "aws-amplify/auth";
-import { authConfig } from "./config";
 import { AuthContext } from "./context";
 
-Amplify.configure(authConfig);
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:3000";
+const TOKEN_KEY = "regispot-token";
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [accessToken, setAccessToken] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [pendingUsername, setPendingUsername] = useState(null);
+  // Start loading only if a token exists — avoids synchronous setState in effect
+  const [loading, setLoading] = useState(() => !!localStorage.getItem(TOKEN_KEY));
 
+  // On mount, restore session from localStorage by validating the stored token
   useEffect(() => {
-    checkAuth();
+    const stored = localStorage.getItem(TOKEN_KEY);
+    if (!stored) return;
+    fetch(`${API_BASE}/auth/me`, {
+      headers: { Authorization: `Bearer ${stored}` },
+    })
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((data) => {
+        setUser({ userId: data.userId, email: data.email, name: data.name });
+        setAccessToken(stored);
+      })
+      .catch(() => {
+        // Token expired or invalid — clear it
+        localStorage.removeItem(TOKEN_KEY);
+      })
+      .finally(() => setLoading(false));
   }, []);
 
-  async function checkAuth() {
-    try {
-      const currentUser = await getCurrentUser();
-      const session = await fetchAuthSession();
-      const token = session.tokens?.idToken?.toString();
-
-      setUser({
-        userId: currentUser.userId,
-        username: currentUser.username,
-        email: session.tokens?.idToken?.payload?.email,
-        name:
-          session.tokens?.idToken?.payload?.name ||
-          session.tokens?.idToken?.payload?.email?.split("@")[0],
-      });
-      setAccessToken(token);
-    } catch {
-      setUser(null);
-      setAccessToken(null);
-    } finally {
-      setLoading(false);
-    }
-  }
-
   async function login(email, password) {
-    const result = await amplifySignIn({ username: email, password });
-    if (result.isSignedIn) {
-      await checkAuth();
-    }
-    return result;
+    const res = await fetch(`${API_BASE}/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Sign in failed");
+
+    localStorage.setItem(TOKEN_KEY, data.token);
+    setUser({ userId: data.user.userId, email: data.user.email, name: data.user.name });
+    setAccessToken(data.token);
+
+    // Return { isSignedIn: true } to match the shape LoginPage expects
+    return { isSignedIn: true };
   }
 
   async function register(email, password, name) {
-    const username = crypto.randomUUID();
-    const result = await signUp({
-      username,
-      password,
-      options: { userAttributes: { email, name } },
+    const res = await fetch(`${API_BASE}/auth/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password, name }),
     });
-    setPendingUsername(username);
-    return result;
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Registration failed");
+
+    // Auto sign-in after register — no confirmation step needed
+    localStorage.setItem(TOKEN_KEY, data.token);
+    setUser({ userId: data.user.userId, email: data.user.email, name: data.user.name });
+    setAccessToken(data.token);
+
+    return data;
   }
 
-  async function confirmAccount(email, code) {
-    const username = pendingUsername || email;
-    const result = await confirmSignUp({ username, confirmationCode: code });
-    setPendingUsername(null);
-    return result;
+  function logout() {
+    localStorage.removeItem(TOKEN_KEY);
+    setUser(null);
+    setAccessToken(null);
   }
 
-  async function logout() {
-    try {
-      await signOut();
-      setUser(null);
-      setAccessToken(null);
-    } catch (err) {
-      console.error("Logout error:", err);
-    }
-  }
-
-  const value = {
-    user,
-    accessToken,
-    loading,
-    login,
-    register,
-    confirmAccount,
-    logout,
-    isAuthenticated: !!user,
-  };
-
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={{
+      user,
+      accessToken,
+      loading,
+      login,
+      register,
+      logout,
+      isAuthenticated: !!user,
+    }}>
+      {children}
+    </AuthContext.Provider>
+  );
 }

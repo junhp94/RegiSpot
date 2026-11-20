@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: regispot-api
+    runtime: node
+    rootDir: server
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        sync: false          # paste from Neon dashboard — never committed to git
+      - key: JWT_SECRET
+        generateValue: true  # Render generates a secure random value on first deploy
+      - key: ALLOWED_ORIGINS
+        value: https://junhp94.github.io,http://localhost:5173
+      - key: NODE_ENV
+        value: production

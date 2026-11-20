@@ -1,0 +1,27 @@
+{
+  "name": "regispot-server",
+  "version": "1.0.0",
+  "description": "RegiSpot Express API — replaces AWS Lambda + API Gateway",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/migrate.js && node src/index.js",
+    "dev": "node --watch src/index.js",
+    "test": "node --test src/test/app.test.js",
+    "migrate": "node src/migrate.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "express-rate-limit": "^7.4.0",
+    "jsonwebtoken": "^9.0.2",
+    "pg": "^8.12.0"
+  },
+  "devDependencies": {
+    "dotenv": "^16.4.5"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
