@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import AuthButton from "./AuthButton";
+import Logo from "./Logo";
 import { useThemeContext } from "../hooks/useThemeContext";
 
 export default function TopBar() {
@@ -11,9 +12,7 @@ export default function TopBar() {
         to="/dashboard"
         className="flex items-center gap-3 no-underline text-inherit"
       >
-        <div className="w-11 h-11 rounded-[14px] grid place-items-center bg-white/70 dark:bg-slate-700/60 border border-slate-900/10 dark:border-slate-400/15 shadow-md shadow-slate-900/8">
-          🏸
-        </div>
+        <Logo />
         <div>
           <div className="text-[22px] font-bold tracking-tight text-slate-900 dark:text-slate-100">
             RegiSpot
