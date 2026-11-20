@@ -8,6 +8,7 @@ import { AuthProvider } from "./auth/AuthContext";
 
 createRoot(document.getElementById("root")).render(
   <StrictMode>
+    {/* basename tells React Router the root path ("/RegiSpot/" on GitHub Pages, "/" locally) */}
     <BrowserRouter basename={import.meta.env.BASE_URL}>
       <ThemeProvider>
         <AuthProvider>
