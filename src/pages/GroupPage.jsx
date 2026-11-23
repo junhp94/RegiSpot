@@ -6,10 +6,31 @@ import useSessions from "../hooks/useSessions";
 import SessionCard from "../components/SessionCard";
 import CreateSessionModal from "../components/CreateSessionModal";
 import MembersPanel from "../components/MembersPanel";
+import SchedulesPanel from "../components/SchedulesPanel";
+import EditSessionModal from "../components/EditSessionModal";
 import Toast from "../components/Toast";
 import { BTN_PRIMARY, ERROR_BOX } from "../lib/styles";
 import { SkeletonGrid, SkeletonLine } from "../components/Skeleton";
 import EmptyState from "../components/EmptyState";
+
+const OWNER_VIEWS = [
+  ["upcoming", "Upcoming"],
+  ["scheduled", "Scheduled"],
+  ["past", "Past"],
+];
+const EMPTY_TITLES = {
+  upcoming: "No open sessions",
+  scheduled: "Nothing scheduled",
+  past: "No past sessions",
+};
+const EMPTY_OWNER_TEXT = {
+  upcoming: "Sessions appear here once they open, 5 days before they start.",
+  scheduled: "Add a weekly schedule, or a one-off session, to fill the next 4 weeks.",
+  past: "Sessions show up here after they end.",
+};
+const CHIP = "h-9 px-3 rounded-full border text-sm font-bold cursor-pointer";
+const CHIP_ON = `${CHIP} border-accent bg-accent text-white`;
+const CHIP_OFF = `${CHIP} border-line-strong bg-surface text-fg hover:bg-subtle`;
 
 export default function GroupPage() {
   const { groupId } = useParams();
@@ -19,7 +40,9 @@ export default function GroupPage() {
   const [group, setGroup] = useState(null);
   const [groupLoading, setGroupLoading] = useState(true);
   const [tab, setTab] = useState("sessions");
+  const [view, setView] = useState("upcoming"); // owner sub-tab
   const [showCreateSession, setShowCreateSession] = useState(false);
+  const [editingSession, setEditingSession] = useState(null);
   const [copied, setCopied] = useState(false);
   const [loadError, setLoadError] = useState("");
 
@@ -31,11 +54,15 @@ export default function GroupPage() {
     toast,
     signup,
     unregister,
+    removeSignup,
+    addCourt,
+    cancelSession,
+    editSession,
     createSession,
     deleteSession,
     toggleSignups,
     clearToast,
-  } = useSessions(groupId);
+  } = useSessions(groupId, view);
 
   useEffect(() => {
     let cancelled = false;
@@ -146,17 +173,47 @@ export default function GroupPage() {
         >
           Members
         </button>
+        {isOwner && (
+          <button
+            role="tab"
+            aria-selected={tab === "schedules"}
+            className={tab === "schedules" ? TAB_ON : TAB_OFF}
+            onClick={() => setTab("schedules")}
+          >
+            Schedules
+          </button>
+        )}
       </div>
+
+      {tab === "sessions" && isOwner && (
+        <div className="flex gap-2 mb-4 flex-wrap" role="tablist" aria-label="Session view">
+          {OWNER_VIEWS.map(([key, label]) => (
+            <button
+              key={key}
+              role="tab"
+              aria-selected={view === key}
+              className={view === key ? CHIP_ON : CHIP_OFF}
+              onClick={() => setView(key)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {tab === "sessions" && (
         sessionsLoading ? (
           <SkeletonGrid count={4} />
         ) : sessions.length === 0 ? (
           <EmptyState
-            title="No sessions scheduled"
-            description={isOwner ? "Add a date, time and place so members can register." : "When the owner adds a session, it will show up here."}
-            actionLabel={isOwner ? "New session" : undefined}
-            onAction={isOwner ? () => setShowCreateSession(true) : undefined}
+            title={EMPTY_TITLES[isOwner ? view : "upcoming"]}
+            description={
+              isOwner
+                ? EMPTY_OWNER_TEXT[view]
+                : "The next session opens 5 days before it starts."
+            }
+            actionLabel={isOwner && view !== "past" ? "New session" : undefined}
+            onAction={isOwner && view !== "past" ? () => setShowCreateSession(true) : undefined}
           />
         ) : (
           <div className="flex flex-col gap-3">
@@ -165,23 +222,37 @@ export default function GroupPage() {
                 key={session.id}
                 session={session}
                 isOpen={openSessionId === session.id}
-                signups={signupsBySession[session.id] || []}
+                signups={signupsBySession[session.id]}
                 isOwner={isOwner}
                 onRegister={signup}
                 onUnregister={unregister}
                 onDelete={deleteSession}
                 onToggle={toggleSignups}
+                onRemove={removeSignup}
+                onAddCourt={addCourt}
+                onCancel={cancelSession}
+                onEdit={setEditingSession}
               />
             ))}
           </div>
         )
       )}
 
+      {tab === "schedules" && isOwner && <SchedulesPanel groupId={groupId} />}
+
       {tab === "members" && (
         <MembersPanel
           groupId={groupId}
           isOwner={isOwner}
           onLeft={() => navigate("/dashboard", { replace: true })}
+        />
+      )}
+
+      {editingSession && (
+        <EditSessionModal
+          session={editingSession}
+          onSubmit={(patch) => editSession(editingSession.id, patch)}
+          onClose={() => setEditingSession(null)}
         />
       )}
 

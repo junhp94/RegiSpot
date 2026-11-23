@@ -4,12 +4,14 @@
  *   POST   /leave      → leave group (registered BEFORE /:userId to avoid conflict)
  *   DELETE /:userId    → kick member
  *
- * Improvement over old code: kick and leave now also delete the user's signups
- * from all sessions in that group and decrement signed_up_count — in one
- * transaction. The old Lambda code left orphaned signup records.
+ * Kick and leave delete the user's signups in this group (removeUserSignupsInGroup):
+ * only registered rows decrement signed_up_count, freed spots are promoted, all in one
+ * transaction.
  */
 import { Router } from "express";
 import pool from "../lib/db.js";
+import { removeUserSignupsInGroup } from "../lib/signupQueue.js";
+import { sessionTimes, vancouverToday } from "../lib/vancouverTime.js";
 
 export const membersRouter = Router({ mergeParams: true });
 
@@ -55,20 +57,21 @@ membersRouter.post("/leave", async (req, res) => {
   try {
     await client.query("BEGIN");
 
-    // Delete all signups the user has in this group's sessions and decrement counters
-    await client.query(
-      `UPDATE sessions s
-       SET signed_up_count = GREATEST(s.signed_up_count - 1, 0)
-       FROM signups su
-       WHERE su.session_id = s.id AND su.user_id = $1 AND s.group_id = $2`,
-      [userId, groupId]
+    // Remove their signups; only registered rows free a spot, which is then promoted
+    // Leaving can't be used to dodge the day-of unregister lock.
+    const mine = await client.query(
+      `SELECT s.* FROM sessions s JOIN signups su ON su.session_id = s.id
+       WHERE s.group_id = $1 AND su.user_id = $2 AND su.status = 'registered'
+         AND NOT s.cancelled AND s.date = $3`,
+      [groupId, userId, vancouverToday(new Date())]
     );
-    await client.query(
-      `DELETE FROM signups su
-       USING sessions s
-       WHERE su.session_id = s.id AND su.user_id = $1 AND s.group_id = $2`,
-      [userId, groupId]
-    );
+    const now = new Date();
+    if (mine.rows.some((s) => { const t = sessionTimes(s, now); return t.locked && !t.ended; })) {
+      await client.query("ROLLBACK");
+      return res.status(403).json({ error: "You can't leave the group on the day of a session you're registered for." });
+    }
+
+    await removeUserSignupsInGroup(client, groupId, userId, vancouverToday(now));
 
     // Remove membership and decrement group count
     await client.query(
@@ -114,20 +117,8 @@ membersRouter.delete("/:targetUserId", async (req, res) => {
   try {
     await client.query("BEGIN");
 
-    // Delete kicked user's signups in this group's sessions and decrement counters
-    await client.query(
-      `UPDATE sessions s
-       SET signed_up_count = GREATEST(s.signed_up_count - 1, 0)
-       FROM signups su
-       WHERE su.session_id = s.id AND su.user_id = $1 AND s.group_id = $2`,
-      [targetUserId, groupId]
-    );
-    await client.query(
-      `DELETE FROM signups su
-       USING sessions s
-       WHERE su.session_id = s.id AND su.user_id = $1 AND s.group_id = $2`,
-      [targetUserId, groupId]
-    );
+    // Remove their signups; only registered rows free a spot, which is then promoted
+    await removeUserSignupsInGroup(client, groupId, targetUserId, vancouverToday(new Date()));
 
     await client.query(
       "DELETE FROM members WHERE group_id = $1 AND user_id = $2",

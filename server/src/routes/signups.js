@@ -1,68 +1,84 @@
 /**
  * Signup routes — mounted at /groups/:groupId/sessions/:sessionId
- *   POST   /signup   → register
- *   DELETE /signup   → unregister
- *   GET    /signups  → list signups
+ *   POST   /signup   → register, or join the waitlist when full
+ *   DELETE /signup   → unregister (locked on the session day) / leave waitlist
+ *   GET    /signups  → { registered: [...], waitlist: [...] }, each numbered
  *
- * Concurrency guarantee: signup uses a conditional UPDATE in a transaction.
- * UPDATE ... WHERE signed_up_count < capacity RETURNING id
- * Zero rows returned → session is full (or doesn't exist).
- * The (session_id, user_id) PRIMARY KEY then catches duplicate signups.
- * This mirrors the DynamoDB TransactWrite pattern:
- *   condition check on capacity + conditional put for uniqueness.
+ * Every write runs in a transaction that first locks the session row
+ * (see lib/signupQueue.js), then promotes waitlisted players into any spot
+ * that opened.
  */
 import { Router } from "express";
 import pool from "../lib/db.js";
+import { lockSession, promote, positionOf, listSignups } from "../lib/signupQueue.js";
+import { sessionTimes } from "../lib/vancouverTime.js";
 
 export const signupsRouter = Router({ mergeParams: true });
+
+const LOCKED_MSG = "You can't unregister on the day of the session.";
+
+async function membership(groupId, userId) {
+  const r = await pool.query(
+    "SELECT nickname, role FROM members WHERE group_id = $1 AND user_id = $2",
+    [groupId, userId]
+  );
+  return r.rows[0] || null;
+}
+
+// Runs fn(client) inside BEGIN/COMMIT. fn returns [status, body].
+async function inTransaction(res, label, fn) {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const [status, body] = await fn(client);
+    await client.query(status < 400 ? "COMMIT" : "ROLLBACK");
+    res.status(status).json(body);
+  } catch (err) {
+    await client.query("ROLLBACK");
+    if (err.code === "23505") return res.status(409).json({ error: "You're already signed up" });
+    console.error(`${label} error:`, err);
+    res.status(500).json({ error: "Server error" });
+  } finally {
+    client.release();
+  }
+}
 
 // POST /groups/:groupId/sessions/:sessionId/signup
 signupsRouter.post("/signup", async (req, res) => {
   const { groupId, sessionId } = req.params;
   const { userId } = req.user;
 
-  const memberRes = await pool.query(
-    "SELECT nickname FROM members WHERE group_id = $1 AND user_id = $2",
-    [groupId, userId]
-  );
-  if (!memberRes.rows[0]) return res.status(403).json({ error: "You are not a member of this group" });
-  const { nickname } = memberRes.rows[0];
+  const member = await membership(groupId, userId);
+  if (!member) return res.status(403).json({ error: "You are not a member of this group" });
 
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
+  await inTransaction(res, "signup", async (client) => {
+    const session = await lockSession(client, groupId, sessionId);
+    if (!session) return [404, { error: "Session not found" }];
 
-    // Atomically increment only if capacity not reached
-    const upd = await client.query(
-      `UPDATE sessions
-       SET signed_up_count = signed_up_count + 1
-       WHERE id = $1 AND group_id = $2 AND signed_up_count < capacity
-       RETURNING id`,
-      [sessionId, groupId]
+    const t = sessionTimes(session, new Date());
+    if (session.cancelled || t.ended) return [409, { error: "This session is closed" }];
+    if (!t.visible) return [403, { error: "Registration hasn't opened yet" }];
+
+    const existing = await client.query(
+      "SELECT 1 FROM signups WHERE session_id = $1 AND user_id = $2", [sessionId, userId]
     );
-    if (upd.rowCount === 0) {
-      await client.query("ROLLBACK");
-      return res.status(409).json({ error: "Duplicate signup or session full" });
-    }
+    if (existing.rows[0]) return [409, { error: "You're already signed up" }];
 
-    // Insert signup row; unique PK catches duplicate signups
+    const hasSpot = session.signed_up_count < session.capacity;
     await client.query(
-      `INSERT INTO signups (session_id, user_id, nickname) VALUES ($1,$2,$3)`,
-      [sessionId, userId, nickname]
+      `INSERT INTO signups (session_id, user_id, nickname, status, registered_at)
+       VALUES ($1, $2, $3, $4::text, CASE WHEN $4::text = 'registered' THEN now() END)`,
+      // registered_at uses the DB clock, same as promote() — mixing Node's clock skews the order
+      [sessionId, userId, member.nickname, hasSpot ? "registered" : "waitlisted"]
     );
-
-    await client.query("COMMIT");
-    res.json({ success: true });
-  } catch (err) {
-    await client.query("ROLLBACK");
-    if (err.code === "23505") {
-      return res.status(409).json({ error: "Duplicate signup or session full" });
+    if (hasSpot) {
+      await client.query(
+        "UPDATE sessions SET signed_up_count = signed_up_count + 1 WHERE id = $1", [sessionId]
+      );
     }
-    console.error("signup error:", err);
-    res.status(500).json({ error: "Server error" });
-  } finally {
-    client.release();
-  }
+    const pos = await positionOf(client, sessionId, userId);
+    return [200, { status: pos.status, position: pos.position }];
+  });
 });
 
 // DELETE /groups/:groupId/sessions/:sessionId/signup
@@ -70,40 +86,34 @@ signupsRouter.delete("/signup", async (req, res) => {
   const { groupId, sessionId } = req.params;
   const { userId } = req.user;
 
-  const memberRes = await pool.query(
-    "SELECT 1 FROM members WHERE group_id = $1 AND user_id = $2",
-    [groupId, userId]
-  );
-  if (!memberRes.rows[0]) return res.status(403).json({ error: "You are not a member of this group" });
+  if (!(await membership(groupId, userId))) {
+    return res.status(403).json({ error: "You are not a member of this group" });
+  }
 
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
+  await inTransaction(res, "unregister", async (client) => {
+    const session = await lockSession(client, groupId, sessionId);
+    if (!session) return [404, { error: "Session not found" }];
 
-    const del = await client.query(
-      "DELETE FROM signups WHERE session_id = $1 AND user_id = $2 RETURNING session_id",
-      [sessionId, userId]
+    const row = await client.query(
+      "SELECT status FROM signups WHERE session_id = $1 AND user_id = $2", [sessionId, userId]
     );
-    if (del.rowCount === 0) {
-      await client.query("ROLLBACK");
-      return res.status(409).json({ error: "Not registered or already unregistered" });
+    const status = row.rows[0]?.status;
+    if (!status) return [409, { error: "Not registered or already unregistered" }];
+
+    if (status === "registered" && sessionTimes(session, new Date()).locked) {
+      return [403, { error: LOCKED_MSG }];
     }
 
-    await client.query(
-      `UPDATE sessions SET signed_up_count = GREATEST(signed_up_count - 1, 0)
-       WHERE id = $1`,
-      [sessionId]
-    );
-
-    await client.query("COMMIT");
-    res.json({ success: true });
-  } catch (err) {
-    await client.query("ROLLBACK");
-    console.error("unregister error:", err);
-    res.status(500).json({ error: "Server error" });
-  } finally {
-    client.release();
-  }
+    await client.query("DELETE FROM signups WHERE session_id = $1 AND user_id = $2", [sessionId, userId]);
+    if (status === "registered") {
+      await client.query(
+        "UPDATE sessions SET signed_up_count = GREATEST(signed_up_count - 1, 0) WHERE id = $1",
+        [sessionId]
+      );
+      await promote(client, sessionId);
+    }
+    return [200, { success: true, was: status }];
+  });
 });
 
 // GET /groups/:groupId/sessions/:sessionId/signups
@@ -111,24 +121,67 @@ signupsRouter.get("/signups", async (req, res) => {
   const { groupId, sessionId } = req.params;
   const { userId } = req.user;
 
-  const memberRes = await pool.query(
-    "SELECT 1 FROM members WHERE group_id = $1 AND user_id = $2",
-    [groupId, userId]
-  );
-  if (!memberRes.rows[0]) return res.status(403).json({ error: "You are not a member of this group" });
+  const member = await membership(groupId, userId);
+  if (!member) return res.status(403).json({ error: "You are not a member of this group" });
 
   try {
-    const result = await pool.query(
-      `SELECT s.nickname, s.signed_up_at AS "signedUpAt"
-       FROM signups s
-       JOIN sessions sess ON sess.id = s.session_id
-       WHERE s.session_id = $1 AND sess.group_id = $2
-       ORDER BY s.signed_up_at ASC`,
-      [sessionId, groupId]
-    );
-    res.json(result.rows);
+    const s = await pool.query("SELECT 1 FROM sessions WHERE id = $1 AND group_id = $2", [sessionId, groupId]);
+    if (!s.rows[0]) return res.status(404).json({ error: "Session not found" });
+    res.json(await listSignups(pool, sessionId, { includeIds: member.role === "owner" }));
   } catch (err) {
     console.error("getSignups error:", err);
     res.status(500).json({ error: "Server error" });
   }
+});
+
+const SPOTS_PER_COURT = 6;
+
+// DELETE /groups/:groupId/sessions/:sessionId/signups/:targetUserId  (owner; ignores the day-of lock)
+signupsRouter.delete("/signups/:targetUserId", async (req, res) => {
+  const { groupId, sessionId, targetUserId } = req.params;
+  const member = await membership(groupId, req.user.userId);
+  if (!member) return res.status(403).json({ error: "You are not a member of this group" });
+  if (member.role !== "owner") return res.status(403).json({ error: "Only the group owner can remove players" });
+
+  await inTransaction(res, "removeSignup", async (client) => {
+    const session = await lockSession(client, groupId, sessionId);
+    if (!session) return [404, { error: "Session not found" }];
+    const del = await client.query(
+      "DELETE FROM signups WHERE session_id = $1 AND user_id = $2 RETURNING status",
+      [sessionId, targetUserId]
+    );
+    if (!del.rows[0]) return [404, { error: "That player isn't signed up" }];
+    let promoted = 0;
+    if (del.rows[0].status === "registered") {
+      await client.query(
+        "UPDATE sessions SET signed_up_count = GREATEST(signed_up_count - 1, 0) WHERE id = $1",
+        [sessionId]
+      );
+      promoted = await promote(client, sessionId);
+    }
+    return [200, { removed: true, promoted }];
+  });
+});
+
+// POST /groups/:groupId/sessions/:sessionId/add-court  (owner; +1 court, +6 spots)
+signupsRouter.post("/add-court", async (req, res) => {
+  const { groupId, sessionId } = req.params;
+  const member = await membership(groupId, req.user.userId);
+  if (!member) return res.status(403).json({ error: "You are not a member of this group" });
+  if (member.role !== "owner") return res.status(403).json({ error: "Only the group owner can add courts" });
+
+  await inTransaction(res, "addCourt", async (client) => {
+    const session = await lockSession(client, groupId, sessionId);
+    if (!session) return [404, { error: "Session not found" }];
+    if (session.cancelled || sessionTimes(session, new Date()).ended) {
+      return [409, { error: "This session is closed" }];
+    }
+    const upd = await client.query(
+      `UPDATE sessions SET court_count = COALESCE(court_count, 0) + 1, capacity = capacity + $2
+       WHERE id = $1 RETURNING court_count, capacity`,
+      [sessionId, SPOTS_PER_COURT]
+    );
+    const promoted = await promote(client, sessionId);
+    return [200, { courtCount: upd.rows[0].court_count, capacity: upd.rows[0].capacity, promoted }];
+  });
 });

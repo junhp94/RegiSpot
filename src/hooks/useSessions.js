@@ -6,10 +6,15 @@ import {
   getSignups,
   createSession as apiCreateSession,
   deleteSession as apiDeleteSession,
+  updateSession as apiUpdateSession,
+  removeSignup as apiRemoveSignup,
+  addCourt as apiAddCourt,
 } from "../api";
 import { useAuth } from "../auth/useAuth";
 
-export default function useSessions(groupId) {
+// view: "upcoming" | "scheduled" | "past" — only the owner's request honours it.
+// signupsBySession[id] = { registered: [...], waitlist: [...] }
+export default function useSessions(groupId, view = "upcoming") {
   const { accessToken, isAuthenticated } = useAuth();
 
   const [sessions, setSessions] = useState([]);
@@ -19,11 +24,7 @@ export default function useSessions(groupId) {
   const [toast, setToast] = useState(null);
 
   useEffect(() => {
-    if (!groupId?.trim()) {
-      setLoading(false);
-      return;
-    }
-    if (!isAuthenticated) {
+    if (!groupId?.trim() || !isAuthenticated) {
       setLoading(false);
       return;
     }
@@ -33,7 +34,7 @@ export default function useSessions(groupId) {
     async function fetchSessions() {
       setLoading(true);
       try {
-        const data = await getSessions(groupId, accessToken);
+        const data = await getSessions(groupId, accessToken, view);
         if (!cancelled) {
           setSessions(data);
           setOpenSessionId(null);
@@ -50,12 +51,12 @@ export default function useSessions(groupId) {
 
     fetchSessions();
     return () => { cancelled = true; };
-  }, [groupId, accessToken, isAuthenticated]);
+  }, [groupId, accessToken, isAuthenticated, view]);
 
   async function refreshSessions() {
     if (!isAuthenticated) return;
     try {
-      const data = await getSessions(groupId, accessToken);
+      const data = await getSessions(groupId, accessToken, view);
       setSessions(data);
     } catch (e) {
       setToast({ type: "error", text: e.message || "Failed to refresh sessions." });
@@ -68,8 +69,8 @@ export default function useSessions(groupId) {
     return () => clearTimeout(t);
   }, [toast]);
 
-  // After a register/unregister, the cached "who's registered" list is stale.
-  // Refetch it if it's open; otherwise drop it so the next open refetches.
+  // After any change, the cached lists are stale.
+  // Refetch if open; otherwise drop so the next open refetches.
   async function refreshSignups(sessionId) {
     if (openSessionId === sessionId) {
       const data = await getSignups(groupId, sessionId, accessToken);
@@ -83,26 +84,66 @@ export default function useSessions(groupId) {
     }
   }
 
-  const signup = async (sessionId) => {
+  // Runs an action, refreshes the card and its list, and toasts the outcome.
+  async function act(sessionId, fn, successText, failText) {
     try {
-      await apiSignup(groupId, sessionId, accessToken);
+      const result = await fn();
       await refreshSessions();
       await refreshSignups(sessionId);
-      setToast({ type: "success", text: "You're registered!" });
+      setToast({ type: "success", text: typeof successText === "function" ? successText(result) : successText });
+      return result;
     } catch (e) {
-      setToast({ type: "error", text: e.message || "Signup failed." });
+      setToast({ type: "error", text: e.message || failText });
     }
-  };
+  }
 
-  const unregister = async (sessionId) => {
-    try {
-      await apiUnregister(groupId, sessionId, accessToken);
-      await refreshSessions();
-      await refreshSignups(sessionId);
-      setToast({ type: "success", text: "You've been unregistered." });
-    } catch (e) {
-      setToast({ type: "error", text: e.message || "Unregister failed." });
-    }
+  const signup = (sessionId) =>
+    act(
+      sessionId,
+      () => apiSignup(groupId, sessionId, accessToken),
+      (r) => (r.status === "waitlisted"
+        ? `You're on the waitlist — #${r.position}`
+        : `You're registered — #${r.position}`),
+      "Signup failed."
+    );
+
+  const unregister = (sessionId) =>
+    act(
+      sessionId,
+      () => apiUnregister(groupId, sessionId, accessToken),
+      (r) => (r.was === "waitlisted" ? "You've left the waitlist." : "You've been unregistered."),
+      "Unregister failed."
+    );
+
+  const removeSignup = (sessionId, userId) =>
+    act(
+      sessionId,
+      () => apiRemoveSignup(groupId, sessionId, userId, accessToken),
+      (r) => (r.promoted ? "Removed. Next on the waitlist moved up." : "Removed."),
+      "Remove failed."
+    );
+
+  const addCourt = (sessionId) =>
+    act(
+      sessionId,
+      () => apiAddCourt(groupId, sessionId, accessToken),
+      (r) => `Court added — ${r.capacity} spots${r.promoted ? `, ${r.promoted} moved off the waitlist` : ""}.`,
+      "Couldn't add a court."
+    );
+
+  const cancelSession = (sessionId, cancelled) =>
+    act(
+      sessionId,
+      () => apiUpdateSession(groupId, sessionId, { cancelled }, accessToken),
+      cancelled ? "Session cancelled." : "Session restored.",
+      "Update failed."
+    );
+
+  // Throws on failure so the edit form can show the error.
+  const editSession = async (sessionId, patch) => {
+    await apiUpdateSession(groupId, sessionId, patch, accessToken);
+    await refreshSessions();
+    setToast({ type: "success", text: "Session updated." });
   };
 
   const createSession = async (params) => {
@@ -156,6 +197,10 @@ export default function useSessions(groupId) {
     setToast,
     signup,
     unregister,
+    removeSignup,
+    addCourt,
+    cancelSession,
+    editSession,
     createSession,
     deleteSession: deleteSessionById,
     toggleSignups,

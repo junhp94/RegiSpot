@@ -64,3 +64,31 @@ CREATE TABLE IF NOT EXISTS signups (
   signed_up_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   PRIMARY KEY (session_id, user_id)
 );
+
+-- ── Weekly schedules, waitlist, day-of lock (2026-11-23) ─────────────────────
+-- Weekly schedules — sessions are generated from these on request.
+CREATE TABLE IF NOT EXISTS schedules (
+  id               TEXT        PRIMARY KEY,
+  group_id         TEXT        NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+  weekday          INT         NOT NULL CHECK (weekday BETWEEN 0 AND 6),  -- 0 = Sunday
+  start_time       TEXT        NOT NULL,   -- "20:00"
+  end_time         TEXT        NOT NULL,   -- "22:00"
+  location         TEXT        NOT NULL,
+  court_count      INT         NOT NULL,
+  capacity         INT         NOT NULL CHECK (capacity BETWEEN 1 AND 500),
+  open_days_before INT         NOT NULL DEFAULT 5,
+  active           BOOLEAN     NOT NULL DEFAULT true,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS end_time         TEXT;
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS schedule_id      TEXT REFERENCES schedules(id) ON DELETE SET NULL;
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS cancelled        BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS open_days_before INT     NOT NULL DEFAULT 5;
+CREATE UNIQUE INDEX IF NOT EXISTS sessions_schedule_date_idx
+  ON sessions (schedule_id, date) WHERE schedule_id IS NOT NULL;
+
+-- signed_up_count counts only status = 'registered'.
+ALTER TABLE signups ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'registered'
+  CHECK (status IN ('registered', 'waitlisted'));
+ALTER TABLE signups ADD COLUMN IF NOT EXISTS registered_at TIMESTAMPTZ;  -- set on register / promotion

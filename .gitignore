@@ -39,3 +39,4 @@ backend/sam-install/
 
 # Node stuff
 node_modules/
+.superpowers/
