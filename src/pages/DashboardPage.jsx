@@ -1,150 +1,36 @@
-import { useState, useMemo } from "react";
-import { Link } from "react-router-dom";
+import { useState } from "react";
+import { Navigate } from "react-router-dom";
 import useGroups from "../hooks/useGroups";
-import CreateGroupModal from "../components/CreateGroupModal";
 import JoinGroupModal from "../components/JoinGroupModal";
-import { CARD, BTN_PRIMARY, BTN_GHOST } from "../lib/styles";
-import { getSportConfig } from "../lib/sportConfig";
+import { BTN_PRIMARY } from "../lib/styles";
 import { SkeletonGrid } from "../components/Skeleton";
-import EmptyState from "../components/EmptyState";
-import { useAuth } from "../auth/useAuth";
+import { HOME_GROUP_ID, CLUB_NAME } from "../lib/club";
 
+// Single-club app: send members straight to the club's sessions.
+// Anyone who isn't a member yet gets a way to join with the access code.
 export default function DashboardPage() {
-  const { groups, loading, createGroup, joinGroup } = useGroups();
-  const { user } = useAuth();
-  // Group creation is gated server-side by GROUP_CREATORS; hide the UI to match
-  const canCreate = user?.canCreateGroups !== false;
-  const [showCreate, setShowCreate] = useState(false);
+  const { groups, loading, joinGroup } = useGroups();
   const [showJoin, setShowJoin] = useState(false);
-  const [sportFilter, setSportFilter] = useState(null);
 
-  const sportTypes = useMemo(() => {
-    const types = [...new Set(groups.map((g) => g.sportType))];
-    return types;
-  }, [groups]);
+  if (loading) return <SkeletonGrid count={3} />;
 
-  const showFilters = sportTypes.length >= 2;
-
-  const filteredGroups = sportFilter
-    ? groups.filter((g) => g.sportType === sportFilter)
-    : groups;
-
-  if (loading) {
-    return (
-      <>
-        <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
-          <h2 className="text-xl font-bold m-0 text-slate-900 dark:text-slate-100">My Groups</h2>
-        </div>
-        <SkeletonGrid count={4} />
-      </>
-    );
-  }
+  const home = groups.find((g) => g.groupId === HOME_GROUP_ID) || groups[0];
+  if (home) return <Navigate to={`/groups/${home.groupId}`} replace />;
 
   return (
     <>
-      <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
-        <h2 className="text-xl font-bold m-0 text-slate-900 dark:text-slate-100">
-          My Groups
-        </h2>
-        <div className="flex gap-2">
-          {canCreate && (
-            <button className={BTN_PRIMARY} onClick={() => setShowCreate(true)}>
-              Create Group
-            </button>
-          )}
-          <button className={BTN_GHOST} onClick={() => setShowJoin(true)}>
-            Join Group
-          </button>
-        </div>
+      <div className="py-10 px-6 border border-dashed border-line-strong rounded-md">
+        <h1 className="text-xl font-bold m-0 mb-1 text-fg">Join {CLUB_NAME}</h1>
+        <p className="text-base text-muted m-0 mb-4">
+          Open the invite link the club shared, or enter the 6-digit access code.
+        </p>
+        <button className={BTN_PRIMARY} onClick={() => setShowJoin(true)}>
+          Enter access code
+        </button>
       </div>
 
-      {showFilters && (
-        <div className="flex gap-2 mb-4 overflow-x-auto pb-1">
-          <button
-            onClick={() => setSportFilter(null)}
-            className={`text-xs font-semibold px-3 py-1.5 rounded-full border cursor-pointer transition-colors whitespace-nowrap ${
-              sportFilter === null
-                ? "bg-blue-600/10 dark:bg-blue-500/20 border-blue-600/25 dark:border-blue-400/30 text-blue-600 dark:text-blue-400"
-                : "bg-white/55 dark:bg-slate-700/50 border-slate-900/10 dark:border-slate-400/15 text-slate-900/65 dark:text-slate-400 hover:bg-white/80 dark:hover:bg-slate-700/70"
-            }`}
-          >
-            All
-          </button>
-          {sportTypes.map((st) => {
-            const cfg = getSportConfig(st);
-            return (
-              <button
-                key={st}
-                onClick={() => setSportFilter(sportFilter === st ? null : st)}
-                className={`text-xs font-semibold px-3 py-1.5 rounded-full border cursor-pointer transition-colors whitespace-nowrap ${
-                  sportFilter === st
-                    ? "bg-blue-600/10 dark:bg-blue-500/20 border-blue-600/25 dark:border-blue-400/30 text-blue-600 dark:text-blue-400"
-                    : "bg-white/55 dark:bg-slate-700/50 border-slate-900/10 dark:border-slate-400/15 text-slate-900/65 dark:text-slate-400 hover:bg-white/80 dark:hover:bg-slate-700/70"
-                }`}
-              >
-                {cfg.emoji} {cfg.label}
-              </button>
-            );
-          })}
-        </div>
-      )}
-
-      {groups.length === 0 ? (
-        <EmptyState
-          icon="👋"
-          title="Welcome to RegiSpot"
-          description={canCreate
-            ? "Create a group or join one with an access code to get started."
-            : "Open the invite link from your group, or join with an access code."}
-          actionLabel={canCreate ? "Create Group" : "Join Group"}
-          onAction={() => (canCreate ? setShowCreate(true) : setShowJoin(true))}
-        />
-      ) : filteredGroups.length === 0 ? (
-        <EmptyState
-          icon="🔍"
-          description="No groups match this filter."
-        />
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-          {filteredGroups.map((g) => {
-            const cfg = getSportConfig(g.sportType);
-            return (
-              <Link
-                key={g.groupId}
-                to={`/groups/${g.groupId}`}
-                className={`${CARD} border-l-4 ${cfg.borderColor} no-underline text-inherit cursor-pointer transition-all duration-150 hover:shadow-xl hover:-translate-y-0.5`}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <div className="font-bold tracking-tight text-[15px] text-slate-900 dark:text-slate-100">
-                      {cfg.emoji} {g.groupName}
-                    </div>
-                    <div className="mt-1 text-[13px] text-slate-900/65 dark:text-slate-400">
-                      {g.sportType} · {g.role}
-                    </div>
-                  </div>
-                </div>
-                <div className="h-px bg-slate-900/8 dark:bg-slate-400/10 my-3" />
-                <div className="text-[13px] text-slate-900/65 dark:text-slate-400">
-                  Nickname: <strong className="text-slate-900 dark:text-slate-100">{g.nickname}</strong>
-                </div>
-              </Link>
-            );
-          })}
-        </div>
-      )}
-
-      {showCreate && canCreate && (
-        <CreateGroupModal
-          onSubmit={createGroup}
-          onClose={() => setShowCreate(false)}
-        />
-      )}
       {showJoin && (
-        <JoinGroupModal
-          onSubmit={joinGroup}
-          onClose={() => setShowJoin(false)}
-        />
+        <JoinGroupModal onSubmit={joinGroup} onClose={() => setShowJoin(false)} />
       )}
     </>
   );

@@ -6,7 +6,7 @@ export const SPORT_CONFIG = {
     sessionFields: [
       {
         key: "matchFormat",
-        label: "Match Format",
+        label: "Match format",
         type: "select",
         options: [
           { value: "", label: "Any" },
@@ -17,7 +17,7 @@ export const SPORT_CONFIG = {
       },
       {
         key: "skillLevel",
-        label: "Skill Level",
+        label: "Skill level",
         type: "select",
         options: [
           { value: "", label: "All levels" },
@@ -43,7 +43,7 @@ export const SPORT_CONFIG = {
     sessionFields: [
       {
         key: "matchFormat",
-        label: "Match Format",
+        label: "Match format",
         type: "select",
         options: [
           { value: "", label: "Any" },
@@ -54,7 +54,7 @@ export const SPORT_CONFIG = {
       },
       {
         key: "skillLevel",
-        label: "Skill Level",
+        label: "Skill level",
         type: "select",
         options: [
           { value: "", label: "All levels" },
