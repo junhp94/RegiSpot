@@ -5,6 +5,7 @@ import { getSportConfig } from "../lib/sportConfig";
 export default function CreateSessionModal({ onSubmit, onClose, sportType }) {
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
+  const [endTime, setEndTime] = useState("");
   const [location, setLocation] = useState("");
   const [capacity, setCapacity] = useState(20);
   const [sportFields, setSportFields] = useState({});
@@ -28,6 +29,7 @@ export default function CreateSessionModal({ onSubmit, onClose, sportType }) {
     setBusy(true);
     try {
       const params = { date, time, location: location.trim(), capacity: Number(capacity) };
+      if (endTime) params.endTime = endTime;
       for (const field of extraFields) {
         const val = sportFields[field.key];
         if (val !== undefined && val !== "") {
@@ -67,6 +69,14 @@ export default function CreateSessionModal({ onSubmit, onClose, sportType }) {
             type="time"
             value={time}
             onChange={(e) => setTime(e.target.value)}
+          />
+
+          <label className={LABEL}>End time (optional)</label>
+          <input
+            className={INPUT}
+            type="time"
+            value={endTime}
+            onChange={(e) => setEndTime(e.target.value)}
           />
 
           <label className={LABEL}>Location</label>
