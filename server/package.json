@@ -7,7 +7,7 @@
   "scripts": {
     "start": "node src/migrate.js && node src/index.js",
     "dev": "node --watch src/index.js",
-    "test": "node --test src/test/app.test.js",
+    "test": "node --test src/test/",
     "migrate": "node src/migrate.js"
   },
   "dependencies": {
