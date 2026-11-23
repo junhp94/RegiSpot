@@ -20,8 +20,9 @@ const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const isValidTimes = (t) => !Number.isNaN(t.startsAt.getTime());
 
-// Shape a session row for the API. `mine` = { status, position } or undefined.
-function toItem(s, times, counts, mine) {
+// Shape a session row for the API. `mine` = { status, position } or undefined;
+// `guests` = the caller's guests in this session.
+function toItem(s, times, counts, mine, guests = []) {
   return {
     id: s.id,
     date: s.date,
@@ -34,6 +35,7 @@ function toItem(s, times, counts, mine) {
     waitlistCount: counts?.waitlisted ?? 0,
     myStatus: mine?.status ?? null,
     myPosition: mine?.position ?? null,
+    myGuests: guests,
     isRegistered: mine?.status === "registered", // kept for older clients
     locked: times.locked,
     visible: times.visible,
@@ -48,9 +50,9 @@ function toItem(s, times, counts, mine) {
 
 // Waitlist counts per session and the caller's status/position, for a set of session ids.
 async function signupInfo(ids, userId) {
-  if (ids.length === 0) return { counts: new Map(), mine: new Map() };
+  if (ids.length === 0) return { counts: new Map(), mine: new Map(), guests: new Map() };
   const r = await pool.query(
-    `SELECT session_id, user_id, status,
+    `SELECT id, session_id, user_id, added_by, guest_name, status, signed_up_at,
             ROW_NUMBER() OVER (PARTITION BY session_id, status ORDER BY
               CASE WHEN status = 'registered' THEN COALESCE(registered_at, signed_up_at) ELSE signed_up_at END,
               signed_up_at, id)::int AS position
@@ -59,13 +61,22 @@ async function signupInfo(ids, userId) {
   );
   const counts = new Map();
   const mine = new Map();
+  const guests = new Map(); // session_id → caller's guests, in signup order
+  const bySignup = [...r.rows].sort((a, b) => a.signed_up_at - b.signed_up_at || Number(a.id) - Number(b.id));
+  for (const row of bySignup) {
+    if (row.user_id === null && row.added_by === userId) {
+      const list = guests.get(row.session_id) ?? [];
+      list.push({ guestId: String(row.id), name: row.guest_name, status: row.status, position: row.position });
+      guests.set(row.session_id, list);
+    }
+  }
   for (const row of r.rows) {
     const c = counts.get(row.session_id) ?? { registered: 0, waitlisted: 0 };
     c[row.status] += 1;
     counts.set(row.session_id, c);
     if (row.user_id === userId) mine.set(row.session_id, { status: row.status, position: row.position });
   }
-  return { counts, mine };
+  return { counts, mine, guests };
 }
 
 const VIEWS = ["upcoming", "scheduled", "past"];
@@ -106,8 +117,8 @@ sessionsRouter.get("/", async (req, res) => {
     if (view === "past") rows = rows.filter(({ t }) => t.ended).reverse();
     if (!isOwner) rows = rows.filter(({ s }) => !s.cancelled);
 
-    const { counts, mine } = await signupInfo(rows.map(({ s }) => s.id), userId);
-    res.json(rows.map(({ s, t }) => toItem(s, t, counts.get(s.id), mine.get(s.id))));
+    const { counts, mine, guests } = await signupInfo(rows.map(({ s }) => s.id), userId);
+    res.json(rows.map(({ s, t }) => toItem(s, t, counts.get(s.id), mine.get(s.id), guests.get(s.id))));
   } catch (err) {
     console.error("getSessions error:", err);
     res.status(500).json({ error: "Server error" });
@@ -271,8 +282,8 @@ sessionsRouter.patch("/:sessionId", async (req, res) => {
       [sessionId, groupId, ...Object.values(sets)]
     );
     const s = upd.rows[0];
-    const { counts, mine } = await signupInfo([s.id], userId);
-    res.json(toItem(s, sessionTimes(s, new Date()), counts.get(s.id), mine.get(s.id)));
+    const { counts, mine, guests } = await signupInfo([s.id], userId);
+    res.json(toItem(s, sessionTimes(s, new Date()), counts.get(s.id), mine.get(s.id), guests.get(s.id)));
   } catch (err) {
     console.error("updateSession error:", err);
     res.status(500).json({ error: "Server error" });

@@ -851,6 +851,54 @@ describe("guests", async () => {
   });
 });
 
+// ── guests follow their host; myGuests ───────────────────────────────────────
+describe("guests and host membership", async () => {
+  let g;
+  const addGuest = (sid, token, guestName) => api("POST", signupPath(g, sid), { guestName }, token);
+
+  before(async () => { g = await makeGroup("ghost", 4); });
+  after(() => cleanup(g.emails));
+
+  it("kick host → their future guest removed, waitlist promoted, past guest row kept", async () => {
+    const [H, W] = g.members;
+    const fut = await makeSession(g, { date: vanDate(1), time: "20:00", capacity: 1 });
+    const past = await makeSession(g, { date: vanDate(-1), time: "10:00", capacity: 5 });
+    await addGuest(fut, H.token, "Sena");                  // registered
+    await api("POST", signupPath(g, fut), {}, W.token);    // waitlisted
+    await directPool.query(
+      "INSERT INTO signups (session_id, user_id, nickname, guest_name, added_by, status) VALUES ($1,NULL,'Old','Old',$2,'registered')",
+      [past, H.id]);
+    const r = await api("DELETE", `/groups/${g.groupId}/members/${H.id}`, null, g.owner.token);
+    assert.equal(r.status, 200);
+    const list = (await api("GET", signupsPath(g, fut), null, g.owner.token)).body;
+    assert.deepEqual(list.registered.map((x) => x.nickname), [W.nickname]);
+    const kept = await directPool.query("SELECT 1 FROM signups WHERE session_id=$1 AND added_by=$2", [past, H.id]);
+    assert.equal(kept.rowCount, 1);
+  });
+
+  it("host with a registered guest in today's session cannot leave", async () => {
+    const H = g.members[2];
+    const today = await makeSession(g, { date: vanDate(0), time: "23:59", capacity: 5 });
+    assert.equal((await addGuest(today, H.token, "Hana")).body.status, "registered");
+    const r = await api("POST", `/groups/${g.groupId}/members/leave`, {}, H.token);
+    assert.equal(r.status, 403);
+    assert.equal(r.body.error, "You can't leave the group on the day of a session you're registered for.");
+  });
+
+  it("session item myGuests lists the caller's guests with status and position", async () => {
+    const H = g.members[3];
+    const sid = await makeSession(g, { date: vanDate(1), time: "20:00", capacity: 1 });
+    await api("POST", signupPath(g, sid), {}, H.token);    // H takes the only spot
+    const a = (await addGuest(sid, H.token, "Ira")).body;  // waitlist #1
+    const items = (await api("GET", `/groups/${g.groupId}/sessions`, null, H.token)).body;
+    const item = items.find((x) => x.id === sid);
+    assert.deepEqual(item.myGuests, [{ guestId: a.guestId, name: "Ira", status: "waitlisted", position: 1 }]);
+    assert.equal(item.waitlistCount, 1);
+    const other = (await api("GET", `/groups/${g.groupId}/sessions`, null, g.owner.token)).body.find((x) => x.id === sid);
+    assert.deepEqual(other.myGuests, []);
+  });
+});
+
 // ── members: kick & leave cleanup ────────────────────────────────────────────
 describe("kick and leave cleanup", async () => {
   const ownerEmail = `test.kick.owner.${Date.now()}@example.com`;
