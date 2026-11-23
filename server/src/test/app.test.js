@@ -81,7 +81,8 @@ async function cleanup(emails) {
     if (!r.rows[0]) continue;
     const uid = r.rows[0].id;
 
-    // Remove signups the user made in any session
+    // Remove guests they added, then signups the user made in any session
+    await directPool.query("DELETE FROM signups WHERE added_by=$1", [uid]);
     await directPool.query("DELETE FROM signups WHERE user_id=$1", [uid]);
     // Remove memberships in groups they didn't create
     await directPool.query("DELETE FROM members WHERE user_id=$1", [uid]);
@@ -678,7 +679,7 @@ describe("review fixes", async () => {
     await directPool.query(
       `INSERT INTO sessions (id, group_id, date, time, location, capacity, created_by)
        VALUES ($1, $2, $3, '7:00 PM', 'Legacy', 5, $4)`,
-      [`legacy${Date.now()}`.slice(0, 12), g.groupId, vanDate(1), g.owner.id]);
+      [`lg${Math.random().toString(36).slice(2, 12)}`, g.groupId, vanDate(1), g.owner.id]);
     for (const view of ["upcoming", "scheduled", "past"]) {
       const r = await api("GET", `/groups/${g.groupId}/sessions?view=${view}`, null, g.owner.token);
       assert.equal(r.status, 200, `${view}: ${JSON.stringify(r.body)}`);
@@ -697,6 +698,51 @@ describe("review fixes", async () => {
       const item = (await api("GET", `/groups/${g.groupId}/sessions`, null, m.token)).body.find((x) => x.id === sid);
       assert.equal(item.myPosition, i + 1, m.nickname);
     }
+  });
+});
+
+// ── signups schema: surrogate id + guest rows ────────────────────────────────
+describe("signups schema", async () => {
+  let g, sid;
+
+  before(async () => {
+    g = await makeGroup("schema", 1);
+    sid = await makeSession(g, { date: vanDate(1), time: "20:00", capacity: 5 });
+  });
+  after(() => cleanup(g.emails));
+
+  it("schema.sql applies twice without error", async () => {
+    await directPool.query(schema);
+    await directPool.query(schema);
+  });
+
+  it("existing-style member insert without id gets an id", async () => {
+    const r = await directPool.query(
+      "INSERT INTO signups (session_id, user_id, nickname) VALUES ($1,$2,$3) RETURNING id",
+      [sid, g.members[0].id, g.members[0].nickname]);
+    assert.ok(r.rows[0].id);
+  });
+
+  it("duplicate member signup for the same session raises 23505", async () => {
+    await assert.rejects(
+      directPool.query("INSERT INTO signups (session_id, user_id, nickname) VALUES ($1,$2,$3)",
+        [sid, g.members[0].id, g.members[0].nickname]),
+      (err) => err.code === "23505");
+  });
+
+  it("guest row with user_id NULL, guest_name and added_by is accepted", async () => {
+    const r = await directPool.query(
+      "INSERT INTO signups (session_id, user_id, nickname, guest_name, added_by) VALUES ($1,NULL,'Min','Min',$2) RETURNING id",
+      [sid, g.members[0].id]);
+    assert.ok(r.rows[0].id);
+  });
+
+  it("row with both user_id and guest_name is rejected by the CHECK", async () => {
+    await assert.rejects(
+      directPool.query(
+        "INSERT INTO signups (session_id, user_id, nickname, guest_name, added_by) VALUES ($1,$2,'X','X',$2)",
+        [sid, g.owner.id]),
+      (err) => err.code === "23514");
   });
 });
 
