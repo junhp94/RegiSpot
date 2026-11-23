@@ -81,3 +81,31 @@ export async function listSignups(db, sessionId, { includeIds = false } = {}) {
   );
   return { registered: shape(reg.rows), waitlist: shape(wl.rows) };
 }
+
+/**
+ * Remove a user's signups from every session in a group (leave / kick).
+ * Decrements signed_up_count only for registered rows, then promotes.
+ * Call inside a transaction.
+ */
+export async function removeUserSignupsInGroup(client, groupId, userId) {
+  // Lock affected sessions in a stable order before touching them.
+  const locked = await client.query(
+    `SELECT s.id FROM sessions s JOIN signups su ON su.session_id = s.id
+     WHERE s.group_id = $1 AND su.user_id = $2
+     ORDER BY s.id FOR UPDATE OF s`,
+    [groupId, userId]
+  );
+  if (locked.rows.length === 0) return;
+  const del = await client.query(
+    `DELETE FROM signups WHERE user_id = $1 AND session_id = ANY($2) RETURNING session_id, status`,
+    [userId, locked.rows.map((r) => r.id)]
+  );
+  for (const row of del.rows) {
+    if (row.status !== "registered") continue;
+    await client.query(
+      "UPDATE sessions SET signed_up_count = GREATEST(signed_up_count - 1, 0) WHERE id = $1",
+      [row.session_id]
+    );
+    await promote(client, row.session_id);
+  }
+}

@@ -4,12 +4,13 @@
  *   POST   /leave      → leave group (registered BEFORE /:userId to avoid conflict)
  *   DELETE /:userId    → kick member
  *
- * Improvement over old code: kick and leave now also delete the user's signups
- * from all sessions in that group and decrement signed_up_count — in one
- * transaction. The old Lambda code left orphaned signup records.
+ * Kick and leave delete the user's signups in this group (removeUserSignupsInGroup):
+ * only registered rows decrement signed_up_count, freed spots are promoted, all in one
+ * transaction.
  */
 import { Router } from "express";
 import pool from "../lib/db.js";
+import { removeUserSignupsInGroup } from "../lib/signupQueue.js";
 
 export const membersRouter = Router({ mergeParams: true });
 
@@ -55,20 +56,8 @@ membersRouter.post("/leave", async (req, res) => {
   try {
     await client.query("BEGIN");
 
-    // Delete all signups the user has in this group's sessions and decrement counters
-    await client.query(
-      `UPDATE sessions s
-       SET signed_up_count = GREATEST(s.signed_up_count - 1, 0)
-       FROM signups su
-       WHERE su.session_id = s.id AND su.user_id = $1 AND s.group_id = $2`,
-      [userId, groupId]
-    );
-    await client.query(
-      `DELETE FROM signups su
-       USING sessions s
-       WHERE su.session_id = s.id AND su.user_id = $1 AND s.group_id = $2`,
-      [userId, groupId]
-    );
+    // Remove their signups; only registered rows free a spot, which is then promoted
+    await removeUserSignupsInGroup(client, groupId, userId);
 
     // Remove membership and decrement group count
     await client.query(
@@ -114,20 +103,8 @@ membersRouter.delete("/:targetUserId", async (req, res) => {
   try {
     await client.query("BEGIN");
 
-    // Delete kicked user's signups in this group's sessions and decrement counters
-    await client.query(
-      `UPDATE sessions s
-       SET signed_up_count = GREATEST(s.signed_up_count - 1, 0)
-       FROM signups su
-       WHERE su.session_id = s.id AND su.user_id = $1 AND s.group_id = $2`,
-      [targetUserId, groupId]
-    );
-    await client.query(
-      `DELETE FROM signups su
-       USING sessions s
-       WHERE su.session_id = s.id AND su.user_id = $1 AND s.group_id = $2`,
-      [targetUserId, groupId]
-    );
+    // Remove their signups; only registered rows free a spot, which is then promoted
+    await removeUserSignupsInGroup(client, groupId, targetUserId);
 
     await client.query(
       "DELETE FROM members WHERE group_id = $1 AND user_id = $2",

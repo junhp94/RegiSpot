@@ -424,6 +424,49 @@ describe("owner controls", async () => {
   });
 });
 
+// ── kick / leave with a waitlist ─────────────────────────────────────────────
+describe("kick and leave respect the waitlist", async () => {
+  let g, sid, X, Y, Z;
+
+  before(async () => {
+    g = await makeGroup("kwl", 3);
+    [X, Y, Z] = g.members;
+    sid = await makeSession(g, { date: vanDate(1), time: "20:00", capacity: 1 });
+    await api("POST", signupPath(g, sid), {}, X.token); // registered
+    await api("POST", signupPath(g, sid), {}, Y.token); // waitlisted
+  });
+  after(() => cleanup(g.emails));
+
+  const count = async () =>
+    (await directPool.query("SELECT signed_up_count FROM sessions WHERE id=$1", [sid])).rows[0].signed_up_count;
+
+  it("kick waitlisted Y → count stays 1, X still registered", async () => {
+    const r = await api("DELETE", `/groups/${g.groupId}/members/${Y.id}`, null, g.owner.token);
+    assert.equal(r.status, 200);
+    assert.equal(await count(), 1);
+    const list = (await api("GET", signupsPath(g, sid), null, g.owner.token)).body;
+    assert.deepEqual(list.registered.map((x) => x.nickname), [X.nickname]);
+    assert.equal(list.waitlist.length, 0);
+  });
+
+  it("Z leaves the group while waitlisted → count stays 1", async () => {
+    await api("POST", signupPath(g, sid), {}, Z.token);
+    const r = await api("POST", `/groups/${g.groupId}/members/leave`, {}, Z.token);
+    assert.equal(r.status, 200);
+    assert.equal(await count(), 1);
+  });
+
+  it("kick registered X → next waitlisted promoted, count 1", async () => {
+    // Re-add a waitlister: the owner signs up behind X
+    assert.equal((await api("POST", signupPath(g, sid), {}, g.owner.token)).body.status, "waitlisted");
+    const r = await api("DELETE", `/groups/${g.groupId}/members/${X.id}`, null, g.owner.token);
+    assert.equal(r.status, 200);
+    assert.equal(await count(), 1);
+    const list = (await api("GET", signupsPath(g, sid), null, g.owner.token)).body;
+    assert.deepEqual(list.registered.map((x) => x.nickname), ["Owner"]);
+  });
+});
+
 // ── members: kick & leave cleanup ────────────────────────────────────────────
 describe("kick and leave cleanup", async () => {
   const ownerEmail = `test.kick.owner.${Date.now()}@example.com`;
