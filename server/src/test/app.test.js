@@ -544,6 +544,98 @@ describe("schedules", async () => {
   });
 });
 
+// ── session views, fields, edit and cancel ──────────────────────────────────
+describe("session views", async () => {
+  let g, open1, far, past, today, gen2, scheduleId;
+  const list = (g, token, view) =>
+    api("GET", `/groups/${g.groupId}/sessions${view ? `?view=${view}` : ""}`, null, token);
+
+  before(async () => {
+    g = await makeGroup("view", 2);
+    open1 = await makeSession(g, { date: vanDate(1), time: "20:00", endTime: "22:00", capacity: 1 });
+    far = await makeSession(g, { date: vanDate(10), time: "20:00", capacity: 5 });
+    past = await makeSession(g, { date: vanDate(-1), time: "10:00", capacity: 5 });
+    today = await makeSession(g, { date: vanDate(0), time: "23:59", capacity: 5 });
+    const sc = await api("POST", `/groups/${g.groupId}/schedules`,
+      { weekday: weekdayOf(vanDate(2)), startTime: "18:00", endTime: "20:00", location: "Gym", courtCount: 3, capacity: 18 }, g.owner.token);
+    scheduleId = sc.body.id;
+    await list(g, g.owner.token);
+    gen2 = (await directPool.query("SELECT id FROM sessions WHERE schedule_id=$1 AND date=$2", [scheduleId, vanDate(2)])).rows[0].id;
+  });
+  after(() => cleanup(g.emails));
+
+  it("member sees only visible, not-ended, not-cancelled sessions", async () => {
+    const r = await list(g, g.members[0].token, "past"); // view is ignored for members
+    assert.equal(r.status, 200);
+    assert.deepEqual(r.body.map((x) => x.id).sort(), [open1, today, gen2].sort());
+  });
+
+  it("owner views split upcoming / scheduled / past", async () => {
+    const up = (await list(g, g.owner.token)).body.map((x) => x.id);
+    assert.deepEqual(up, [today, open1, gen2]);
+    const sch = (await list(g, g.owner.token, "scheduled")).body.map((x) => x.id);
+    assert.ok(sch.includes(far));
+    assert.equal(sch.length, 4, "far + 3 later generated weeks");
+    const pst = (await list(g, g.owner.token, "past")).body.map((x) => x.id);
+    assert.deepEqual(pst, [past]);
+  });
+
+  it("item fields: endTime, waitlist counts, my position, lock", async () => {
+    const [m0, m1] = g.members;
+    await api("POST", signupPath(g, open1), {}, m0.token);
+    await api("POST", signupPath(g, open1), {}, m1.token);
+    const items = (await list(g, m1.token)).body;
+    const s = items.find((x) => x.id === open1);
+    assert.equal(s.endTime, "22:00");
+    assert.equal(s.signedUpCount, 1);
+    assert.equal(s.waitlistCount, 1);
+    assert.equal(s.myStatus, "waitlisted");
+    assert.equal(s.myPosition, 1);
+    assert.equal(s.locked, false);
+    assert.equal(s.visible, true);
+    assert.equal(s.ended, false);
+    assert.equal(s.cancelled, false);
+    assert.equal(typeof s.opensAt, "string");
+    assert.equal(items.find((x) => x.id === today).locked, true);
+    assert.equal(items.find((x) => x.id === gen2).scheduleId, scheduleId);
+    const mine = (await list(g, m0.token)).body.find((x) => x.id === open1);
+    assert.deepEqual([mine.myStatus, mine.myPosition], ["registered", 1]);
+  });
+
+  it("cancel a generated session → hidden from members, marked for owner, not regenerated", async () => {
+    const r = await api("PATCH", `/groups/${g.groupId}/sessions/${gen2}`, { cancelled: true }, g.owner.token);
+    assert.equal(r.status, 200);
+    assert.equal(r.body.cancelled, true);
+    assert.ok(!(await list(g, g.members[0].token)).body.some((x) => x.id === gen2));
+    const own = (await list(g, g.owner.token)).body.find((x) => x.id === gen2);
+    assert.equal(own.cancelled, true);
+    const n = await directPool.query("SELECT count(*)::int AS n FROM sessions WHERE schedule_id=$1 AND date=$2", [scheduleId, vanDate(2)]);
+    assert.equal(n.rows[0].n, 1);
+  });
+
+  it("cancelled session refuses signups", async () => {
+    const r = await api("POST", signupPath(g, gen2), {}, g.members[0].token);
+    assert.equal(r.status, 409);
+  });
+
+  it("PATCH edits location and time", async () => {
+    const r = await api("PATCH", `/groups/${g.groupId}/sessions/${far}`, { location: "Hall B", time: "19:30", endTime: "21:30" }, g.owner.token);
+    assert.equal(r.status, 200);
+    assert.deepEqual([r.body.location, r.body.time, r.body.endTime], ["Hall B", "19:30", "21:30"]);
+  });
+
+  it("non-owner PATCH → 403; PATCH past session → 409", async () => {
+    assert.equal((await api("PATCH", `/groups/${g.groupId}/sessions/${far}`, { location: "X" }, g.members[0].token)).status, 403);
+    assert.equal((await api("PATCH", `/groups/${g.groupId}/sessions/${past}`, { location: "X" }, g.owner.token)).status, 409);
+  });
+
+  it("DELETE a generated session → 409", async () => {
+    const r = await api("DELETE", `/groups/${g.groupId}/sessions/${gen2}`, null, g.owner.token);
+    assert.equal(r.status, 409);
+    assert.equal(r.body.error, "Cancel generated sessions instead of deleting them");
+  });
+});
+
 // ── members: kick & leave cleanup ────────────────────────────────────────────
 describe("kick and leave cleanup", async () => {
   const ownerEmail = `test.kick.owner.${Date.now()}@example.com`;
