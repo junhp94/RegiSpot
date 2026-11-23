@@ -53,7 +53,7 @@ async function signupInfo(ids, userId) {
     `SELECT session_id, user_id, status,
             ROW_NUMBER() OVER (PARTITION BY session_id, status ORDER BY
               CASE WHEN status = 'registered' THEN COALESCE(registered_at, signed_up_at) ELSE signed_up_at END,
-              signed_up_at, user_id)::int AS position
+              signed_up_at, id)::int AS position
      FROM signups WHERE session_id = ANY($1)`,
     [ids]
   );
