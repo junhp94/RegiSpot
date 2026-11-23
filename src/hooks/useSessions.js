@@ -111,8 +111,14 @@ export default function useSessions(groupId, view = "upcoming") {
   // Throws on failure so the guest form can show the error.
   const registerGuest = async (sessionId, name) => {
     const r = await apiSignup(groupId, sessionId, accessToken, name);
-    await refreshSessions();
-    await refreshSignups(sessionId);
+    // The guest is in. A failed refresh must not look like a failed signup,
+    // or the member retries and books the guest twice.
+    try {
+      await refreshSessions();
+      await refreshSignups(sessionId);
+    } catch {
+      /* lists refresh on the next load */
+    }
     setToast({
       type: "success",
       text: r.status === "waitlisted"

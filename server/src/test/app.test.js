@@ -653,7 +653,7 @@ describe("review fixes", async () => {
     assert.equal((await api("POST", signupPath(g, today), {}, m.token)).body.status, "registered");
     const r = await api("POST", `/groups/${g.groupId}/members/leave`, {}, m.token);
     assert.equal(r.status, 403);
-    assert.equal(r.body.error, "You can't leave the group on the day of a session you're registered for.");
+    assert.equal(r.body.error, "You can't leave the group on the day of a session where you or your guest are registered.");
   });
 
   it("leaving keeps past-session history", async () => {
@@ -882,7 +882,7 @@ describe("guests and host membership", async () => {
     assert.equal((await addGuest(today, H.token, "Hana")).body.status, "registered");
     const r = await api("POST", `/groups/${g.groupId}/members/leave`, {}, H.token);
     assert.equal(r.status, 403);
-    assert.equal(r.body.error, "You can't leave the group on the day of a session you're registered for.");
+    assert.equal(r.body.error, "You can't leave the group on the day of a session where you or your guest are registered.");
   });
 
   it("session item myGuests lists the caller's guests with status and position", async () => {
