@@ -29,7 +29,22 @@ export default function SessionCard({
   onRemove,
   onAddCourt,
   onCancel,
+  onEdit,
 }) {
+  const confirmAddCourt = () => {
+    if (window.confirm(`Add a court? This adds 6 spots (${session.capacity} → ${session.capacity + 6}) and can't be undone.`)) {
+      onAddCourt(session.id);
+    }
+  };
+  const confirmCancel = () => {
+    if (window.confirm("Cancel this session? Members will no longer see it.")) onCancel(session.id, true);
+  };
+  const confirmRemove = (userId) => {
+    const all = [...(signups?.registered ?? []), ...(signups?.waitlist ?? [])];
+    const name = all.find((x) => x.userId === userId)?.nickname ?? "this player";
+    if (window.confirm(`Remove ${name} from this session?`)) onRemove(session.id, userId);
+  };
+
   const taken = session.signedUpCount ?? 0;
   const waiting = session.waitlistCount ?? 0;
   const spotsLeft = session.capacity - taken;
@@ -90,7 +105,7 @@ export default function SessionCard({
       {isOwner && canSignUp && waiting >= NUDGE_AT && (
         <div className="mt-3 flex items-center gap-3 flex-wrap px-3 py-2 rounded-md bg-subtle text-[15px] text-fg">
           <span>{waiting} waiting — add a court?</span>
-          <button className={BTN_PRIMARY} onClick={() => onAddCourt(session.id)}>
+          <button className={BTN_PRIMARY} onClick={confirmAddCourt}>
             Add court
           </button>
         </div>
@@ -124,14 +139,17 @@ export default function SessionCard({
         {isOwner && !isPast && (
           <div className="flex gap-2 flex-wrap items-center ml-auto">
             {!isCancelled && waiting < NUDGE_AT && (
-              <button className={BTN_GHOST} onClick={() => onAddCourt(session.id)}>
+              <button className={BTN_GHOST} onClick={confirmAddCourt}>
                 Add court
               </button>
             )}
+            <button className={BTN_GHOST} onClick={() => onEdit(session)}>
+              Edit
+            </button>
             {session.scheduleId ? (
               <button
                 className={isCancelled ? BTN_GHOST : BTN_DANGER}
-                onClick={() => onCancel(session.id, !isCancelled)}
+                onClick={isCancelled ? () => onCancel(session.id, false) : confirmCancel}
               >
                 {isCancelled ? "Restore" : "Cancel session"}
               </button>
@@ -148,7 +166,7 @@ export default function SessionCard({
         <SignupsList
           signups={signups}
           isOwner={isOwner && !isPast}
-          onRemove={(userId) => onRemove(session.id, userId)}
+          onRemove={confirmRemove}
         />
       )}
     </article>

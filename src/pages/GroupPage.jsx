@@ -7,6 +7,7 @@ import SessionCard from "../components/SessionCard";
 import CreateSessionModal from "../components/CreateSessionModal";
 import MembersPanel from "../components/MembersPanel";
 import SchedulesPanel from "../components/SchedulesPanel";
+import EditSessionModal from "../components/EditSessionModal";
 import Toast from "../components/Toast";
 import { BTN_PRIMARY, ERROR_BOX } from "../lib/styles";
 import { SkeletonGrid, SkeletonLine } from "../components/Skeleton";
@@ -41,6 +42,7 @@ export default function GroupPage() {
   const [tab, setTab] = useState("sessions");
   const [view, setView] = useState("upcoming"); // owner sub-tab
   const [showCreateSession, setShowCreateSession] = useState(false);
+  const [editingSession, setEditingSession] = useState(null);
   const [copied, setCopied] = useState(false);
   const [loadError, setLoadError] = useState("");
 
@@ -55,6 +57,7 @@ export default function GroupPage() {
     removeSignup,
     addCourt,
     cancelSession,
+    editSession,
     createSession,
     deleteSession,
     toggleSignups,
@@ -228,6 +231,7 @@ export default function GroupPage() {
                 onRemove={removeSignup}
                 onAddCourt={addCourt}
                 onCancel={cancelSession}
+                onEdit={setEditingSession}
               />
             ))}
           </div>
@@ -241,6 +245,14 @@ export default function GroupPage() {
           groupId={groupId}
           isOwner={isOwner}
           onLeft={() => navigate("/dashboard", { replace: true })}
+        />
+      )}
+
+      {editingSession && (
+        <EditSessionModal
+          session={editingSession}
+          onSubmit={(patch) => editSession(editingSession.id, patch)}
+          onClose={() => setEditingSession(null)}
         />
       )}
 

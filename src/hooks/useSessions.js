@@ -139,6 +139,13 @@ export default function useSessions(groupId, view = "upcoming") {
       "Update failed."
     );
 
+  // Throws on failure so the edit form can show the error.
+  const editSession = async (sessionId, patch) => {
+    await apiUpdateSession(groupId, sessionId, patch, accessToken);
+    await refreshSessions();
+    setToast({ type: "success", text: "Session updated." });
+  };
+
   const createSession = async (params) => {
     const result = await apiCreateSession(groupId, params, accessToken);
     await refreshSessions();
@@ -193,6 +200,7 @@ export default function useSessions(groupId, view = "upcoming") {
     removeSignup,
     addCourt,
     cancelSession,
+    editSession,
     createSession,
     deleteSession: deleteSessionById,
     toggleSignups,
