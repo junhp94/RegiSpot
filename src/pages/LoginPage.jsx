@@ -44,7 +44,7 @@ export default function LoginPage() {
       <div className="w-full max-w-[400px] p-7 rounded-md bg-surface border border-line">
         <div className="mb-5">
           <Logo className="mb-3 w-12 h-12" />
-          <h1 className="text-2xl font-bold m-0 text-fg">RegiSpot</h1>
+          <h1 className="text-2xl font-bold m-0 text-fg">Vanminton</h1>
           <p className="text-base text-muted m-0 mt-1">Sign in to see your sessions</p>
         </div>
 

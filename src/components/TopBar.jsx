@@ -11,7 +11,7 @@ export default function TopBar() {
       <div className="max-w-[860px] mx-auto px-4 h-16 flex items-center justify-between gap-4">
         <Link to="/dashboard" className="flex items-center gap-2.5 no-underline text-fg">
           <Logo />
-          <span className="text-lg font-bold">RegiSpot</span>
+          <span className="text-lg font-bold">Vanminton</span>
         </Link>
 
         <div className="flex items-center gap-2">
