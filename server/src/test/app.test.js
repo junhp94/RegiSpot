@@ -636,6 +636,70 @@ describe("session views", async () => {
   });
 });
 
+// ── final-review fixes ───────────────────────────────────────────────────────
+describe("review fixes", async () => {
+  let g, today, past;
+
+  before(async () => {
+    g = await makeGroup("fix", 6);
+    today = await makeSession(g, { date: vanDate(0), time: "23:59", capacity: 1 });
+    past = await makeSession(g, { date: vanDate(-1), time: "10:00", capacity: 5 });
+  });
+  after(() => cleanup(g.emails));
+
+  it("leaving the group on the session day while registered is refused", async () => {
+    const m = g.members[0];
+    assert.equal((await api("POST", signupPath(g, today), {}, m.token)).body.status, "registered");
+    const r = await api("POST", `/groups/${g.groupId}/members/leave`, {}, m.token);
+    assert.equal(r.status, 403);
+    assert.equal(r.body.error, "You can't leave the group on the day of a session you're registered for.");
+  });
+
+  it("leaving keeps past-session history", async () => {
+    const m = g.members[1];
+    await directPool.query(
+      "INSERT INTO signups (session_id, user_id, nickname, status, registered_at) VALUES ($1,$2,$3,'registered',now())",
+      [past, m.id, m.nickname]);
+    await directPool.query("UPDATE sessions SET signed_up_count = signed_up_count + 1 WHERE id=$1", [past]);
+    const r = await api("POST", `/groups/${g.groupId}/members/leave`, {}, m.token);
+    assert.equal(r.status, 200);
+    const left = await directPool.query("SELECT 1 FROM signups WHERE session_id=$1 AND user_id=$2", [past, m.id]);
+    assert.equal(left.rowCount, 1);
+  });
+
+  it("POST session with a non-HH:MM time or bad date → 400", async () => {
+    const r1 = await api("POST", `/groups/${g.groupId}/sessions`, { date: vanDate(1), time: "7:00 PM", location: "X", capacity: 5 }, g.owner.token);
+    assert.equal(r1.status, 400);
+    const r2 = await api("POST", `/groups/${g.groupId}/sessions`, { date: "next tuesday", time: "19:00", location: "X", capacity: 5 }, g.owner.token);
+    assert.equal(r2.status, 400);
+  });
+
+  it("a malformed legacy row doesn't break GET /sessions", async () => {
+    await directPool.query(
+      `INSERT INTO sessions (id, group_id, date, time, location, capacity, created_by)
+       VALUES ($1, $2, $3, '7:00 PM', 'Legacy', 5, $4)`,
+      [`legacy${Date.now()}`.slice(0, 12), g.groupId, vanDate(1), g.owner.id]);
+    for (const view of ["upcoming", "scheduled", "past"]) {
+      const r = await api("GET", `/groups/${g.groupId}/sessions?view=${view}`, null, g.owner.token);
+      assert.equal(r.status, 200, `${view}: ${JSON.stringify(r.body)}`);
+    }
+    assert.equal((await api("GET", `/groups/${g.groupId}/sessions`, null, g.members[2].token)).status, 200);
+  });
+
+  it("players promoted together keep their waitlist order", async () => {
+    const sid = await makeSession(g, { date: vanDate(1), time: "20:00", capacity: 1, courtCount: 1 });
+    const ms = g.members.slice(2, 6);
+    for (const m of ms) await api("POST", signupPath(g, sid), {}, m.token);
+    await api("POST", `/groups/${g.groupId}/sessions/${sid}/add-court`, {}, g.owner.token);
+    const list = (await api("GET", signupsPath(g, sid), null, g.owner.token)).body;
+    assert.deepEqual(list.registered.map((x) => x.nickname), ms.map((m) => m.nickname));
+    for (const [i, m] of ms.entries()) {
+      const item = (await api("GET", `/groups/${g.groupId}/sessions`, null, m.token)).body.find((x) => x.id === sid);
+      assert.equal(item.myPosition, i + 1, m.nickname);
+    }
+  });
+});
+
 // ── members: kick & leave cleanup ────────────────────────────────────────────
 describe("kick and leave cleanup", async () => {
   const ownerEmail = `test.kick.owner.${Date.now()}@example.com`;

@@ -11,6 +11,7 @@
 import { Router } from "express";
 import pool from "../lib/db.js";
 import { removeUserSignupsInGroup } from "../lib/signupQueue.js";
+import { sessionTimes, vancouverToday } from "../lib/vancouverTime.js";
 
 export const membersRouter = Router({ mergeParams: true });
 
@@ -57,7 +58,20 @@ membersRouter.post("/leave", async (req, res) => {
     await client.query("BEGIN");
 
     // Remove their signups; only registered rows free a spot, which is then promoted
-    await removeUserSignupsInGroup(client, groupId, userId);
+    // Leaving can't be used to dodge the day-of unregister lock.
+    const mine = await client.query(
+      `SELECT s.* FROM sessions s JOIN signups su ON su.session_id = s.id
+       WHERE s.group_id = $1 AND su.user_id = $2 AND su.status = 'registered'
+         AND NOT s.cancelled AND s.date = $3`,
+      [groupId, userId, vancouverToday(new Date())]
+    );
+    const now = new Date();
+    if (mine.rows.some((s) => { const t = sessionTimes(s, now); return t.locked && !t.ended; })) {
+      await client.query("ROLLBACK");
+      return res.status(403).json({ error: "You can't leave the group on the day of a session you're registered for." });
+    }
+
+    await removeUserSignupsInGroup(client, groupId, userId, vancouverToday(now));
 
     // Remove membership and decrement group count
     await client.query(
@@ -104,7 +118,7 @@ membersRouter.delete("/:targetUserId", async (req, res) => {
     await client.query("BEGIN");
 
     // Remove their signups; only registered rows free a spot, which is then promoted
-    await removeUserSignupsInGroup(client, groupId, targetUserId);
+    await removeUserSignupsInGroup(client, groupId, targetUserId, vancouverToday(new Date()));
 
     await client.query(
       "DELETE FROM members WHERE group_id = $1 AND user_id = $2",

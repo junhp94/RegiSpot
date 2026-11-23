@@ -17,6 +17,8 @@ import {
 export const sessionsRouter = Router({ mergeParams: true });
 
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const isValidTimes = (t) => !Number.isNaN(t.startsAt.getTime());
 
 // Shape a session row for the API. `mine` = { status, position } or undefined.
 function toItem(s, times, counts, mine) {
@@ -38,7 +40,7 @@ function toItem(s, times, counts, mine) {
     ended: times.ended,
     cancelled: s.cancelled,
     scheduleId: s.schedule_id ?? null,
-    opensAt: times.opensAt.toISOString(),
+    opensAt: isValidTimes(times) ? times.opensAt.toISOString() : null,
     ...(s.match_format && { matchFormat: s.match_format }),
     ...(s.skill_level && { skillLevel: s.skill_level }),
   };
@@ -51,7 +53,7 @@ async function signupInfo(ids, userId) {
     `SELECT session_id, user_id, status,
             ROW_NUMBER() OVER (PARTITION BY session_id, status ORDER BY
               CASE WHEN status = 'registered' THEN COALESCE(registered_at, signed_up_at) ELSE signed_up_at END,
-              user_id)::int AS position
+              signed_up_at, user_id)::int AS position
      FROM signups WHERE session_id = ANY($1)`,
     [ids]
   );
@@ -95,7 +97,10 @@ sessionsRouter.get("/", async (req, res) => {
       [groupId, addDays(today, -WINDOW_DAYS), addDays(today, WINDOW_DAYS)]
     );
 
-    let rows = sessRes.rows.map((s) => ({ s, t: sessionTimes(s, now) }));
+    // Rows with an unreadable date/time (legacy data) are skipped rather than failing the list.
+    let rows = sessRes.rows
+      .map((s) => ({ s, t: sessionTimes(s, now) }))
+      .filter(({ t }) => isValidTimes(t));
     if (view === "upcoming") rows = rows.filter(({ t }) => t.visible && !t.ended);
     if (view === "scheduled") rows = rows.filter(({ t }) => !t.visible);
     if (view === "past") rows = rows.filter(({ t }) => t.ended).reverse();
@@ -131,6 +136,8 @@ sessionsRouter.post("/", async (req, res) => {
 
   if (!cleanDate) return res.status(400).json({ error: "date is required" });
   if (!cleanTime) return res.status(400).json({ error: "time is required" });
+  if (!DATE_RE.test(cleanDate)) return res.status(400).json({ error: "date must be YYYY-MM-DD" });
+  if (!TIME_RE.test(cleanTime)) return res.status(400).json({ error: "time must be HH:MM" });
   if (!cleanLocation) return res.status(400).json({ error: "location is required" });
   if (!cap || cap < 1 || cap > 500) return res.status(400).json({ error: "capacity must be between 1 and 500" });
   if (endTime != null && endTime !== "" && !TIME_RE.test(endTime)) {

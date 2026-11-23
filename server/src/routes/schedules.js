@@ -134,6 +134,13 @@ schedulesRouter.patch("/:scheduleId", async (req, res) => {
       return res.status(404).json({ error: "Schedule not found" });
     }
 
+    // Lock this schedule's future sessions first: signup writes hold the same row lock,
+    // so after this point the NOT EXISTS(signups) checks below can't miss a new signup.
+    await client.query(
+      "SELECT id FROM sessions WHERE schedule_id = $1 AND date >= $2 ORDER BY id FOR UPDATE",
+      [scheduleId, today]
+    );
+
     const copy = cols.filter((c) => SESSION_COPY[c]);
     if (copy.length > 0) {
       await client.query(

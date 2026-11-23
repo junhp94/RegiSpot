@@ -58,6 +58,12 @@ describe("vancouverTime", () => {
     assert.equal(sessionTimes(s, new Date("2026-11-24T08:00:00Z")).locked, true); // 00:00 on the 24th
   });
 
+  it("unreadable time yields an invalid start and is never visible, without throwing", () => {
+    const t = sessionTimes({ date: "2026-11-24", time: "7:00 PM" }, new Date("2026-11-24T00:00:00Z"));
+    assert.ok(Number.isNaN(t.startsAt.getTime()));
+    assert.equal(t.visible, false);
+  });
+
   it("ended after end_time, defaults to start + 2h without one", () => {
     assert.equal(
       sessionTimes({ date: "2026-11-24", time: "20:00", end_time: "22:00" }, new Date("2026-11-25T06:00:00Z")).ended,

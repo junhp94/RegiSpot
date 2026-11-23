@@ -11,7 +11,8 @@
  * signed_up_count counts registered rows only.
  */
 
-export const REGISTERED_ORDER = "COALESCE(registered_at, signed_up_at), user_id";
+// signed_up_at breaks ties between players promoted together (same now()).
+export const REGISTERED_ORDER = "COALESCE(registered_at, signed_up_at), signed_up_at, user_id";
 export const WAITLIST_ORDER = "signed_up_at, user_id";
 
 /** Lock and return the session row, or null if it isn't in this group. */
@@ -52,7 +53,7 @@ export async function positionOf(db, sessionId, userId) {
        SELECT user_id, status,
               ROW_NUMBER() OVER (PARTITION BY status ORDER BY
                 CASE WHEN status = 'registered' THEN COALESCE(registered_at, signed_up_at) ELSE signed_up_at END,
-                user_id)::int AS position
+                signed_up_at, user_id)::int AS position
        FROM signups WHERE session_id = $1
      ) x WHERE user_id = $2`,
     [sessionId, userId]
@@ -87,13 +88,14 @@ export async function listSignups(db, sessionId, { includeIds = false } = {}) {
  * Decrements signed_up_count only for registered rows, then promotes.
  * Call inside a transaction.
  */
-export async function removeUserSignupsInGroup(client, groupId, userId) {
+export async function removeUserSignupsInGroup(client, groupId, userId, today) {
+  // Only today and later — past sessions keep their attendance history.
   // Lock affected sessions in a stable order before touching them.
   const locked = await client.query(
     `SELECT s.id FROM sessions s JOIN signups su ON su.session_id = s.id
-     WHERE s.group_id = $1 AND su.user_id = $2
+     WHERE s.group_id = $1 AND su.user_id = $2 AND s.date >= $3
      ORDER BY s.id FOR UPDATE OF s`,
-    [groupId, userId]
+    [groupId, userId, today]
   );
   if (locked.rows.length === 0) return;
   const del = await client.query(

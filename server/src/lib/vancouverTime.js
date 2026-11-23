@@ -54,6 +54,7 @@ export function zonedToUtc(dateStr, timeStr) {
   const { y, m, d } = parseDate(dateStr);
   const [hh, mm] = timeStr.split(":").map(Number);
   const guess = Date.UTC(y, m - 1, d, hh, mm);
+  if (Number.isNaN(guess)) return new Date(NaN); // unreadable legacy value; callers check
   let result = guess - offsetAt(guess);
   // Re-check the offset at the result to settle DST edges.
   result = guess - offsetAt(result);
