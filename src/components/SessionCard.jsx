@@ -1,4 +1,6 @@
 import SignupsList from "./SignupsList";
+import GuestModal from "./GuestModal";
+import { useState } from "react";
 import { CARD, BTN_PRIMARY, BTN_GHOST, BTN_DANGER } from "../lib/styles";
 import { formatMatchFormat, formatSkillLevel } from "../lib/sportConfig";
 
@@ -30,7 +32,10 @@ export default function SessionCard({
   onAddCourt,
   onCancel,
   onEdit,
+  onRegisterGuest,
+  onRemoveGuest,
 }) {
+  const [showGuest, setShowGuest] = useState(false);
   const confirmAddCourt = () => {
     if (window.confirm(`Add a court? This adds 6 spots (${session.capacity} → ${session.capacity + 6}) and can't be undone.`)) {
       onAddCourt(session.id);
@@ -39,11 +44,16 @@ export default function SessionCard({
   const confirmCancel = () => {
     if (window.confirm("Cancel this session? Members will no longer see it.")) onCancel(session.id, true);
   };
-  const confirmRemove = (userId) => {
-    const all = [...(signups?.registered ?? []), ...(signups?.waitlist ?? [])];
-    const name = all.find((x) => x.userId === userId)?.nickname ?? "this player";
-    if (window.confirm(`Remove ${name} from this session?`)) onRemove(session.id, userId);
+  // Owner's × in the list: members by userId, guests by guestId
+  const confirmRemove = (row) => {
+    if (!window.confirm(`Remove ${row.nickname} from this session?`)) return;
+    if (row.isGuest) onRemoveGuest(session.id, row.guestId);
+    else onRemove(session.id, row.userId);
   };
+  const confirmRemoveGuest = (guest) => {
+    if (window.confirm(`Remove ${guest.name}?`)) onRemoveGuest(session.id, guest.guestId);
+  };
+  const myGuests = session.myGuests ?? [];
 
   const taken = session.signedUpCount ?? 0;
   const waiting = session.waitlistCount ?? 0;
@@ -102,6 +112,33 @@ export default function SessionCard({
         <div className="mt-2 text-sm font-bold text-fg">Waitlist #{session.myPosition}</div>
       )}
 
+      {myGuests.length > 0 && (
+        <div className="mt-2">
+          <div className="text-sm font-bold text-fg">Your guests</div>
+          <ul className="m-0 mt-1 p-0 list-none flex flex-col gap-1">
+            {myGuests.map((g) => (
+              <li key={g.guestId} className="flex items-center gap-3 flex-wrap text-[15px] text-fg">
+                <span>
+                  {g.name} — {g.status === "waitlisted" ? `Waitlist #${g.position}` : `#${g.position}`}
+                </span>
+                {canSignUp && (
+                  g.status === "registered" && session.locked ? (
+                    <span className="text-sm text-muted">Locked on session day</span>
+                  ) : (
+                    <button
+                      className="h-8 px-3 rounded-md border border-line-strong bg-surface text-fg text-sm font-bold cursor-pointer hover:bg-subtle"
+                      onClick={() => confirmRemoveGuest(g)}
+                    >
+                      Remove
+                    </button>
+                  )
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {isOwner && canSignUp && waiting >= NUDGE_AT && (
         <div className="mt-3 flex items-center gap-3 flex-wrap px-3 py-2 rounded-md bg-subtle text-[15px] text-fg">
           <span>{waiting} waiting — add a court?</span>
@@ -129,6 +166,11 @@ export default function SessionCard({
         {canSignUp && !status && (
           <button className={BTN_PRIMARY} onClick={() => onRegister(session.id)}>
             {isFull ? "Join waitlist" : "Register"}
+          </button>
+        )}
+        {canSignUp && (
+          <button className={BTN_GHOST} onClick={() => setShowGuest(true)}>
+            Register for a guest
           </button>
         )}
 
@@ -167,6 +209,13 @@ export default function SessionCard({
           signups={signups}
           isOwner={isOwner && !isPast}
           onRemove={confirmRemove}
+        />
+      )}
+
+      {showGuest && (
+        <GuestModal
+          onSubmit={(name) => onRegisterGuest(session.id, name)}
+          onClose={() => setShowGuest(false)}
         />
       )}
     </article>
