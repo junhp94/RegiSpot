@@ -81,7 +81,7 @@ GET    /health
 ### Database (Neon Postgres)
 See `server/src/schema.sql` for full schema.
 
-Key concurrency pattern: signup uses `UPDATE sessions SET signed_up_count = signed_up_count + 1 WHERE id = $1 AND signed_up_count < capacity RETURNING id` — zero rows returned → 409 full.
+Key concurrency pattern: every signup write BEGINs, locks the session row with `SELECT … FOR UPDATE` (`lockSession` in `server/src/lib/signupQueue.js`), applies its change, then calls `promote()` to move waitlisted players into open spots. `signed_up_count` counts `status = 'registered'` rows only. All day-of-lock / visibility maths uses America/Vancouver via `server/src/lib/vancouverTime.js`.
 
 ## Environment Variables
 
