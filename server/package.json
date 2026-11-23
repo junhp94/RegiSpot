@@ -8,7 +8,8 @@
     "start": "node src/migrate.js && node src/index.js",
     "dev": "node --watch src/index.js",
     "test": "node --test src/test/",
-    "migrate": "node src/migrate.js"
+    "migrate": "node src/migrate.js",
+    "seed:schedules": "node src/scripts/seedSchedules.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
