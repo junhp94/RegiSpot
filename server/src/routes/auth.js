@@ -24,6 +24,8 @@ const limiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "Too many requests, please try again later." },
+  // The integration suite registers dozens of users from one IP.
+  skip: () => process.env.NODE_ENV === "test",
 });
 
 authRouter.use(limiter);

@@ -133,3 +133,55 @@ signupsRouter.get("/signups", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+
+const SPOTS_PER_COURT = 6;
+
+// DELETE /groups/:groupId/sessions/:sessionId/signups/:targetUserId  (owner; ignores the day-of lock)
+signupsRouter.delete("/signups/:targetUserId", async (req, res) => {
+  const { groupId, sessionId, targetUserId } = req.params;
+  const member = await membership(groupId, req.user.userId);
+  if (!member) return res.status(403).json({ error: "You are not a member of this group" });
+  if (member.role !== "owner") return res.status(403).json({ error: "Only the group owner can remove players" });
+
+  await inTransaction(res, "removeSignup", async (client) => {
+    const session = await lockSession(client, groupId, sessionId);
+    if (!session) return [404, { error: "Session not found" }];
+    const del = await client.query(
+      "DELETE FROM signups WHERE session_id = $1 AND user_id = $2 RETURNING status",
+      [sessionId, targetUserId]
+    );
+    if (!del.rows[0]) return [404, { error: "That player isn't signed up" }];
+    let promoted = 0;
+    if (del.rows[0].status === "registered") {
+      await client.query(
+        "UPDATE sessions SET signed_up_count = GREATEST(signed_up_count - 1, 0) WHERE id = $1",
+        [sessionId]
+      );
+      promoted = await promote(client, sessionId);
+    }
+    return [200, { removed: true, promoted }];
+  });
+});
+
+// POST /groups/:groupId/sessions/:sessionId/add-court  (owner; +1 court, +6 spots)
+signupsRouter.post("/add-court", async (req, res) => {
+  const { groupId, sessionId } = req.params;
+  const member = await membership(groupId, req.user.userId);
+  if (!member) return res.status(403).json({ error: "You are not a member of this group" });
+  if (member.role !== "owner") return res.status(403).json({ error: "Only the group owner can add courts" });
+
+  await inTransaction(res, "addCourt", async (client) => {
+    const session = await lockSession(client, groupId, sessionId);
+    if (!session) return [404, { error: "Session not found" }];
+    if (session.cancelled || sessionTimes(session, new Date()).ended) {
+      return [409, { error: "This session is closed" }];
+    }
+    const upd = await client.query(
+      `UPDATE sessions SET court_count = COALESCE(court_count, 0) + 1, capacity = capacity + $2
+       WHERE id = $1 RETURNING court_count, capacity`,
+      [sessionId, SPOTS_PER_COURT]
+    );
+    const promoted = await promote(client, sessionId);
+    return [200, { courtCount: upd.rows[0].court_count, capacity: upd.rows[0].capacity, promoted }];
+  });
+});

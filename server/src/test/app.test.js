@@ -25,6 +25,8 @@ try {
   dotenv.config({ path: envPath });
 } catch { /* .env is optional in CI — env vars are injected directly */ }
 
+process.env.NODE_ENV = "test"; // disables the auth rate limiter for this suite
+
 // Dynamic import AFTER dotenv so db.js sees DATABASE_URL
 const { default: app } = await import("../app.js");
 const { vancouverToday, addDays } = await import("../lib/vancouverTime.js");
@@ -369,6 +371,56 @@ describe("waitlist and lock", async () => {
          FROM sessions s WHERE id = $1`, [sid]);
       assert.equal(c.rows[0].n, c.rows[0].r);
     }
+  });
+});
+
+// ── owner controls: remove from session, add court ───────────────────────────
+describe("owner controls", async () => {
+  let g, today, wide;
+
+  before(async () => {
+    g = await makeGroup("own", 6);
+    today = await makeSession(g, { date: vanDate(0), time: "23:59", capacity: 1 });
+    wide = await makeSession(g, { date: vanDate(1), time: "20:00", capacity: 2, courtCount: 1 });
+  });
+  after(() => cleanup(g.emails));
+
+  it("owner removes a registered member on the session day → waitlist #1 promoted", async () => {
+    const [m0, m1] = g.members;
+    await api("POST", signupPath(g, today), {}, m0.token);
+    await api("POST", signupPath(g, today), {}, m1.token);
+    const r = await api("DELETE", `/groups/${g.groupId}/sessions/${today}/signups/${m0.id}`, null, g.owner.token);
+    assert.equal(r.status, 200);
+    assert.deepEqual(r.body, { removed: true, promoted: 1 });
+    const list = (await api("GET", signupsPath(g, today), null, g.owner.token)).body;
+    assert.deepEqual(list.registered.map((x) => x.nickname), [m1.nickname]);
+    assert.equal(list.waitlist.length, 0);
+  });
+
+  it("non-owner cannot remove → 403", async () => {
+    const [, m1, m2] = g.members;
+    const r = await api("DELETE", `/groups/${g.groupId}/sessions/${today}/signups/${m1.id}`, null, m2.token);
+    assert.equal(r.status, 403);
+  });
+
+  it("removing someone not signed up → 404", async () => {
+    const r = await api("DELETE", `/groups/${g.groupId}/sessions/${today}/signups/${g.members[5].id}`, null, g.owner.token);
+    assert.equal(r.status, 404);
+  });
+
+  it("add court: capacity 2 with 3 waitlisted → capacity 8, courtCount 2, 3 promoted", async () => {
+    for (const m of g.members.slice(0, 5)) await api("POST", signupPath(g, wide), {}, m.token);
+    const r = await api("POST", `/groups/${g.groupId}/sessions/${wide}/add-court`, {}, g.owner.token);
+    assert.equal(r.status, 200);
+    assert.deepEqual(r.body, { courtCount: 2, capacity: 8, promoted: 3 });
+    const list = (await api("GET", signupsPath(g, wide), null, g.owner.token)).body;
+    assert.equal(list.registered.length, 5);
+    assert.equal(list.waitlist.length, 0);
+  });
+
+  it("non-owner add-court → 403", async () => {
+    const r = await api("POST", `/groups/${g.groupId}/sessions/${wide}/add-court`, {}, g.members[0].token);
+    assert.equal(r.status, 403);
   });
 });
 
