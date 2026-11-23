@@ -92,3 +92,40 @@ CREATE UNIQUE INDEX IF NOT EXISTS sessions_schedule_date_idx
 ALTER TABLE signups ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'registered'
   CHECK (status IN ('registered', 'waitlisted'));
 ALTER TABLE signups ADD COLUMN IF NOT EXISTS registered_at TIMESTAMPTZ;  -- set on register / promotion
+
+-- ── Guests (2026-11-23) ──────────────────────────────────────────────────────
+-- A guest is a signups row with no account: user_id NULL, guest_name set,
+-- added_by = the member who registered them. Rows get a surrogate id so a
+-- member can add any number of guests to one session.
+ALTER TABLE signups ADD COLUMN IF NOT EXISTS id         BIGSERIAL;
+ALTER TABLE signups ADD COLUMN IF NOT EXISTS guest_name TEXT;
+ALTER TABLE signups ADD COLUMN IF NOT EXISTS added_by   UUID REFERENCES users(id);
+
+-- Move the primary key from (session_id, user_id) to id — only while it is still the old key.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'signups_pkey' AND conrelid = 'signups'::regclass
+      AND pg_get_constraintdef(oid) LIKE '%user_id%'
+  ) THEN
+    ALTER TABLE signups DROP CONSTRAINT signups_pkey;
+    ALTER TABLE signups ADD PRIMARY KEY (id);
+  END IF;
+END $$;
+
+ALTER TABLE signups ALTER COLUMN user_id DROP NOT NULL;
+
+-- Still one signup per member per session (raises 23505 on duplicates, as before).
+CREATE UNIQUE INDEX IF NOT EXISTS signups_session_user_idx
+  ON signups (session_id, user_id) WHERE user_id IS NOT NULL;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'signups_member_or_guest') THEN
+    ALTER TABLE signups ADD CONSTRAINT signups_member_or_guest CHECK (
+      (user_id IS NOT NULL AND guest_name IS NULL)
+      OR (user_id IS NULL AND guest_name IS NOT NULL AND added_by IS NOT NULL)
+    );
+  END IF;
+END $$;

@@ -9,6 +9,7 @@ import {
   updateSession as apiUpdateSession,
   removeSignup as apiRemoveSignup,
   addCourt as apiAddCourt,
+  removeGuest as apiRemoveGuest,
 } from "../api";
 import { useAuth } from "../auth/useAuth";
 
@@ -107,6 +108,34 @@ export default function useSessions(groupId, view = "upcoming") {
       "Signup failed."
     );
 
+  // Throws on failure so the guest form can show the error.
+  const registerGuest = async (sessionId, name) => {
+    const r = await apiSignup(groupId, sessionId, accessToken, name);
+    // The guest is in. A failed refresh must not look like a failed signup,
+    // or the member retries and books the guest twice.
+    try {
+      await refreshSessions();
+      await refreshSignups(sessionId);
+    } catch {
+      /* lists refresh on the next load */
+    }
+    setToast({
+      type: "success",
+      text: r.status === "waitlisted"
+        ? `${name} is on the waitlist — #${r.position}`
+        : `${name} is registered — #${r.position}`,
+    });
+    return r;
+  };
+
+  const removeGuest = (sessionId, guestId) =>
+    act(
+      sessionId,
+      () => apiRemoveGuest(groupId, sessionId, guestId, accessToken),
+      (r) => (r.promoted ? "Guest removed. Next on the waitlist moved up." : "Guest removed."),
+      "Couldn't remove the guest."
+    );
+
   const unregister = (sessionId) =>
     act(
       sessionId,
@@ -198,6 +227,8 @@ export default function useSessions(groupId, view = "upcoming") {
     signup,
     unregister,
     removeSignup,
+    registerGuest,
+    removeGuest,
     addCourt,
     cancelSession,
     editSession,

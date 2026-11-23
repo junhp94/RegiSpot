@@ -101,14 +101,24 @@ export async function deleteSession(groupId, sessionId, accessToken) {
 // Signups
 // ============================================
 
-export async function signup(groupId, sessionId, accessToken) {
+// With guestName, registers a guest (no account) instead of the caller.
+export async function signup(groupId, sessionId, accessToken, guestName) {
   const res = await fetch(
     `${API_BASE}/groups/${encodeURIComponent(groupId)}/sessions/${encodeURIComponent(sessionId)}/signup`,
     {
       method: "POST",
       headers: authHeaders(accessToken),
-      body: JSON.stringify({}),
+      body: JSON.stringify(guestName === undefined ? {} : { guestName }),
     }
+  );
+  return readJson(res, {});
+}
+
+// Host (day-of lock applies) or owner removes a guest
+export async function removeGuest(groupId, sessionId, guestId, accessToken) {
+  const res = await fetch(
+    `${API_BASE}/groups/${encodeURIComponent(groupId)}/sessions/${encodeURIComponent(sessionId)}/guests/${encodeURIComponent(guestId)}`,
+    { method: "DELETE", headers: authHeaders(accessToken) }
   );
   return readJson(res, {});
 }

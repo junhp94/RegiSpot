@@ -55,6 +55,8 @@ export default function GroupPage() {
     signup,
     unregister,
     removeSignup,
+    registerGuest,
+    removeGuest,
     addCourt,
     cancelSession,
     editSession,
@@ -232,6 +234,8 @@ export default function GroupPage() {
                 onAddCourt={addCourt}
                 onCancel={cancelSession}
                 onEdit={setEditingSession}
+                onRegisterGuest={registerGuest}
+                onRemoveGuest={removeGuest}
               />
             ))}
           </div>

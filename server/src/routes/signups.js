@@ -16,6 +16,7 @@ import { sessionTimes } from "../lib/vancouverTime.js";
 export const signupsRouter = Router({ mergeParams: true });
 
 const LOCKED_MSG = "You can't unregister on the day of the session.";
+const GUEST_NAME_MAX = 40;
 
 async function membership(groupId, userId) {
   const r = await pool.query(
@@ -51,6 +52,15 @@ signupsRouter.post("/signup", async (req, res) => {
   const member = await membership(groupId, userId);
   if (!member) return res.status(403).json({ error: "You are not a member of this group" });
 
+  // { guestName } registers a guest instead of the caller.
+  let guestName = null;
+  if (req.body?.guestName !== undefined) {
+    guestName = typeof req.body.guestName === "string" ? req.body.guestName.trim() : "";
+    if (guestName.length < 1 || guestName.length > GUEST_NAME_MAX) {
+      return res.status(400).json({ error: "Guest name must be 1–40 characters" });
+    }
+  }
+
   await inTransaction(res, "signup", async (client) => {
     const session = await lockSession(client, groupId, sessionId);
     if (!session) return [404, { error: "Session not found" }];
@@ -59,25 +69,36 @@ signupsRouter.post("/signup", async (req, res) => {
     if (session.cancelled || t.ended) return [409, { error: "This session is closed" }];
     if (!t.visible) return [403, { error: "Registration hasn't opened yet" }];
 
-    const existing = await client.query(
-      "SELECT 1 FROM signups WHERE session_id = $1 AND user_id = $2", [sessionId, userId]
-    );
-    if (existing.rows[0]) return [409, { error: "You're already signed up" }];
+    if (!guestName) {
+      const existing = await client.query(
+        "SELECT 1 FROM signups WHERE session_id = $1 AND user_id = $2", [sessionId, userId]
+      );
+      if (existing.rows[0]) return [409, { error: "You're already signed up" }];
+    }
 
     const hasSpot = session.signed_up_count < session.capacity;
-    await client.query(
-      `INSERT INTO signups (session_id, user_id, nickname, status, registered_at)
-       VALUES ($1, $2, $3, $4::text, CASE WHEN $4::text = 'registered' THEN now() END)`,
+    // A guest row has no account: user_id NULL, named by guest_name, owned by added_by.
+    const ins = await client.query(
+      `INSERT INTO signups (session_id, user_id, nickname, guest_name, added_by, status, registered_at)
+       VALUES ($1, $2, $3, $4, $5, $6::text, CASE WHEN $6::text = 'registered' THEN now() END)
+       RETURNING id`,
       // registered_at uses the DB clock, same as promote() — mixing Node's clock skews the order
-      [sessionId, userId, member.nickname, hasSpot ? "registered" : "waitlisted"]
+      guestName
+        ? [sessionId, null, guestName, guestName, userId, hasSpot ? "registered" : "waitlisted"]
+        : [sessionId, userId, member.nickname, null, null, hasSpot ? "registered" : "waitlisted"]
     );
     if (hasSpot) {
       await client.query(
         "UPDATE sessions SET signed_up_count = signed_up_count + 1 WHERE id = $1", [sessionId]
       );
     }
-    const pos = await positionOf(client, sessionId, userId);
-    return [200, { status: pos.status, position: pos.position }];
+    const signupId = ins.rows[0].id;
+    const pos = await positionOf(client, sessionId, signupId);
+    return [200, {
+      status: pos.status,
+      position: pos.position,
+      ...(guestName && { guestId: String(signupId) }),
+    }];
   });
 });
 
@@ -127,7 +148,7 @@ signupsRouter.get("/signups", async (req, res) => {
   try {
     const s = await pool.query("SELECT 1 FROM sessions WHERE id = $1 AND group_id = $2", [sessionId, groupId]);
     if (!s.rows[0]) return res.status(404).json({ error: "Session not found" });
-    res.json(await listSignups(pool, sessionId, { includeIds: member.role === "owner" }));
+    res.json(await listSignups(pool, sessionId, { viewerId: userId, isOwner: member.role === "owner" }));
   } catch (err) {
     console.error("getSignups error:", err);
     res.status(500).json({ error: "Server error" });
@@ -183,5 +204,41 @@ signupsRouter.post("/add-court", async (req, res) => {
     );
     const promoted = await promote(client, sessionId);
     return [200, { courtCount: upd.rows[0].court_count, capacity: upd.rows[0].capacity, promoted }];
+  });
+});
+
+// DELETE /groups/:groupId/sessions/:sessionId/guests/:guestId
+// The guest's host (day-of lock applies to a registered guest) or the owner (no lock).
+signupsRouter.delete("/guests/:guestId", async (req, res) => {
+  const { groupId, sessionId, guestId } = req.params;
+  const { userId } = req.user;
+  const member = await membership(groupId, userId);
+  if (!member) return res.status(403).json({ error: "You are not a member of this group" });
+  if (!/^\d{1,18}$/.test(guestId)) return res.status(404).json({ error: "Guest not found" });
+  const isOwner = member.role === "owner";
+
+  await inTransaction(res, "removeGuest", async (client) => {
+    const session = await lockSession(client, groupId, sessionId);
+    if (!session) return [404, { error: "Session not found" }];
+    const row = (await client.query(
+      "SELECT status, added_by FROM signups WHERE id = $1 AND session_id = $2 AND user_id IS NULL",
+      [guestId, sessionId]
+    )).rows[0];
+    if (!row) return [404, { error: "Guest not found" }];
+    if (!isOwner && row.added_by !== userId) return [403, { error: "You can only remove guests you added" }];
+    if (!isOwner && row.status === "registered" && sessionTimes(session, new Date()).locked) {
+      return [403, { error: LOCKED_MSG }];
+    }
+
+    await client.query("DELETE FROM signups WHERE id = $1", [guestId]);
+    let promoted = 0;
+    if (row.status === "registered") {
+      await client.query(
+        "UPDATE sessions SET signed_up_count = GREATEST(signed_up_count - 1, 0) WHERE id = $1",
+        [sessionId]
+      );
+      promoted = await promote(client, sessionId);
+    }
+    return [200, { removed: true, promoted }];
   });
 });

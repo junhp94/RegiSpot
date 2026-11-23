@@ -58,17 +58,17 @@ membersRouter.post("/leave", async (req, res) => {
     await client.query("BEGIN");
 
     // Remove their signups; only registered rows free a spot, which is then promoted
-    // Leaving can't be used to dodge the day-of unregister lock.
+    // Leaving can't be used to dodge the day-of unregister lock (theirs or a guest's).
     const mine = await client.query(
       `SELECT s.* FROM sessions s JOIN signups su ON su.session_id = s.id
-       WHERE s.group_id = $1 AND su.user_id = $2 AND su.status = 'registered'
+       WHERE s.group_id = $1 AND (su.user_id = $2 OR su.added_by = $2) AND su.status = 'registered'
          AND NOT s.cancelled AND s.date = $3`,
       [groupId, userId, vancouverToday(new Date())]
     );
     const now = new Date();
     if (mine.rows.some((s) => { const t = sessionTimes(s, now); return t.locked && !t.ended; })) {
       await client.query("ROLLBACK");
-      return res.status(403).json({ error: "You can't leave the group on the day of a session you're registered for." });
+      return res.status(403).json({ error: "You can't leave the group on the day of a session where you or your guest are registered." });
     }
 
     await removeUserSignupsInGroup(client, groupId, userId, vancouverToday(now));
