@@ -37,7 +37,7 @@ export default function CreateSessionModal({ onSubmit, onClose, sportType }) {
       await onSubmit(params);
       onClose();
     } catch (err) {
-      setError(err.message || "Failed to create session.");
+      setError(err.message || "Couldn't create the session. Try again.");
     } finally {
       setBusy(false);
     }
@@ -46,8 +46,8 @@ export default function CreateSessionModal({ onSubmit, onClose, sportType }) {
   return (
     <div className={MODAL_OVERLAY} onClick={onClose}>
       <div className={MODAL_CARD} onClick={(e) => e.stopPropagation()}>
-        <h3 className="text-lg font-bold m-0 mb-4 text-slate-900 dark:text-slate-100">
-          Create Session
+        <h3 className="text-xl font-bold m-0 mb-2 text-fg">
+          New session
         </h3>
 
         {error && <div className={ERROR_BOX}>{error}</div>}
@@ -117,7 +117,7 @@ export default function CreateSessionModal({ onSubmit, onClose, sportType }) {
           <div className="flex justify-end gap-2.5 mt-5">
             <button type="button" className={BTN_GHOST} onClick={onClose}>Cancel</button>
             <button type="submit" className={BTN_PRIMARY} disabled={busy}>
-              {busy ? "Creating..." : "Create Session"}
+              {busy ? "Creating..." : "Create session"}
             </button>
           </div>
         </form>

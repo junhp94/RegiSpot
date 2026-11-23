@@ -38,14 +38,14 @@ export default function JoinPage() {
 
   if (!showModal) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-bg1 dark:bg-dark-bg1 text-text dark:text-dark-text">
-        <p className="text-slate-900/65 dark:text-slate-400">Loading...</p>
+      <div className="min-h-screen flex items-center justify-center bg-page text-fg">
+        <p className="text-muted">Loading...</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center py-7 px-4 bg-gradient-to-br from-bg2 via-transparent to-transparent bg-bg1 text-text dark:bg-dark-bg1 dark:text-dark-text">
+    <div className="min-h-screen flex items-center justify-center py-7 px-4 bg-page text-fg">
       <JoinGroupModal
         onSubmit={handleJoin}
         onClose={handleClose}

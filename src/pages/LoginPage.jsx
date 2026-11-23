@@ -1,4 +1,5 @@
 import { useState } from "react";
+import Logo from "../components/Logo";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
 import { INPUT, LABEL, BTN_PRIMARY, ERROR_BOX } from "../lib/styles";
@@ -39,18 +40,12 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center py-7 px-4 bg-gradient-to-br from-bg2 via-transparent to-transparent bg-bg1 text-text dark:bg-dark-bg1 dark:text-dark-text">
-      <div className="w-full max-w-[400px] p-8 rounded-2xl bg-white/72 dark:bg-slate-800/90 border border-slate-900/10 dark:border-slate-400/15 shadow-lg shadow-slate-900/10 dark:shadow-black/20 backdrop-blur-sm">
-        <div className="text-center mb-6">
-          <div className="w-11 h-11 rounded-[14px] grid place-items-center bg-white/70 dark:bg-slate-700/60 border border-slate-900/10 dark:border-slate-400/15 shadow-md shadow-slate-900/8 mx-auto mb-3">
-            🏸
-          </div>
-          <div className="text-[22px] font-bold tracking-tight text-slate-900 dark:text-slate-100 mb-1">
-            RegiSpot
-          </div>
-          <p className="text-sm text-slate-900/65 dark:text-slate-400 mt-1 mb-0">
-            Sign in to your account
-          </p>
+    <div className="min-h-screen flex items-center justify-center py-8 px-4 bg-page text-fg">
+      <div className="w-full max-w-[400px] p-7 rounded-md bg-surface border border-line">
+        <div className="mb-5">
+          <Logo className="mb-3 w-12 h-12" />
+          <h1 className="text-2xl font-bold m-0 text-fg">RegiSpot</h1>
+          <p className="text-base text-muted m-0 mt-1">Sign in to see your sessions</p>
         </div>
 
         {error && <div className={ERROR_BOX}>{error}</div>}
@@ -78,14 +73,14 @@ export default function LoginPage() {
             autoComplete="current-password"
           />
 
-          <button className={`${BTN_PRIMARY} w-full mt-5 text-sm`} type="submit" disabled={busy}>
-            {busy ? "Signing in..." : "Sign In"}
+          <button className={`${BTN_PRIMARY} w-full mt-6`} type="submit" disabled={busy}>
+            {busy ? "Signing in..." : "Sign in"}
           </button>
         </form>
 
-        <p className="text-center text-[13px] text-slate-900/65 dark:text-slate-400 mt-5">
+        <p className="text-[15px] text-muted mt-5 mb-0">
           Don&apos;t have an account?{" "}
-          <Link to="/signup" className="text-blue-600 dark:text-blue-400 no-underline font-semibold hover:underline">
+          <Link to="/signup" className="text-accent-text font-bold underline">
             Sign up
           </Link>
         </p>

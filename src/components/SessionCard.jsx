@@ -1,12 +1,19 @@
 import SignupsList from "./SignupsList";
-import { CARD, BTN_PRIMARY, BTN_GHOST, BTN_DANGER, PILL_OPEN, PILL_FULL } from "../lib/styles";
+import { CARD, BTN_PRIMARY, BTN_GHOST, BTN_DANGER } from "../lib/styles";
 import { formatMatchFormat, formatSkillLevel } from "../lib/sportConfig";
 
-function formatDateTime(s) {
-  return `${s.date} · ${s.time}`;
+// "2026-11-25" + "19:00" -> "Wed, Nov 25" and "7:00 PM"
+function formatDate(date) {
+  const d = new Date(`${date}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return date;
+  return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
 }
 
-const BADGE = "text-xs py-0.5 px-2 rounded-full font-medium";
+function formatTime(time) {
+  const d = new Date(`1970-01-01T${time}`);
+  if (Number.isNaN(d.getTime())) return time;
+  return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+}
 
 export default function SessionCard({
   session,
@@ -18,85 +25,71 @@ export default function SessionCard({
   onDelete,
   onToggle,
 }) {
-  const spotsLeft = session.capacity - (session.signedUpCount ?? 0);
+  const taken = session.signedUpCount ?? 0;
+  const spotsLeft = session.capacity - taken;
   const isFull = spotsLeft <= 0;
 
-  const badges = [];
-  if (session.matchFormat) {
-    badges.push({ label: formatMatchFormat(session.matchFormat), color: "bg-purple-100 dark:bg-purple-500/20 text-purple-700 dark:text-purple-300" });
-  }
-  if (session.skillLevel) {
-    badges.push({ label: formatSkillLevel(session.skillLevel), color: "bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300" });
-  }
+  const details = [];
+  if (session.matchFormat) details.push(formatMatchFormat(session.matchFormat));
+  if (session.skillLevel) details.push(formatSkillLevel(session.skillLevel));
   if (session.courtCount) {
-    badges.push({ label: `${session.courtCount} court${session.courtCount > 1 ? "s" : ""}`, color: "bg-teal-100 dark:bg-teal-500/20 text-teal-700 dark:text-teal-300" });
+    details.push(`${session.courtCount} court${session.courtCount > 1 ? "s" : ""}`);
   }
 
   return (
-    <div className={`${CARD} transition-all duration-150 hover:shadow-xl hover:-translate-y-0.5`}>
-      <div className="flex items-start justify-between gap-3">
+    <article className={`${CARD} ${session.isRegistered ? "border-l-4 border-l-accent" : ""}`}>
+      <div className="flex items-start justify-between gap-4">
         <div>
-          <div className="font-bold tracking-tight text-[15px] text-slate-900 dark:text-slate-100">
-            {formatDateTime(session)}
-          </div>
-          <div className="mt-1 text-[13px] text-slate-900/65 dark:text-slate-400">
-            {session.location}
-          </div>
+          <h3 className="m-0 text-lg font-bold text-fg">
+            {formatDate(session.date)}, {formatTime(session.time)}
+          </h3>
+          <div className="mt-0.5 text-[15px] text-fg">{session.location}</div>
+          {details.length > 0 && (
+            <div className="mt-0.5 text-sm text-muted">{details.join(", ")}</div>
+          )}
         </div>
 
-        <div className={isFull ? PILL_FULL : PILL_OPEN}>
-          {isFull ? "Full" : `${spotsLeft} left`}
+        <div className="text-right shrink-0">
+          <div className={`text-[15px] font-bold ${isFull ? "text-danger" : "text-fg"}`}>
+            {isFull ? "Full" : `${spotsLeft} spot${spotsLeft === 1 ? "" : "s"} left`}
+          </div>
+          <div className="text-sm text-muted">
+            {taken} of {session.capacity}
+          </div>
         </div>
       </div>
 
-      {badges.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 mt-2">
-          {badges.map((b) => (
-            <span key={b.label} className={`${BADGE} ${b.color}`}>
-              {b.label}
-            </span>
-          ))}
-        </div>
+      {session.isRegistered && (
+        <div className="mt-2 text-sm font-bold text-accent-text">You're registered</div>
       )}
 
-      <div className="h-px bg-slate-900/8 dark:bg-slate-400/10 my-3" />
-
-      <div className="flex gap-2.5 flex-wrap">
+      <div className="flex gap-2 flex-wrap items-center mt-4">
         {session.isRegistered ? (
-          <button
-            className={BTN_DANGER}
-            onClick={() => onUnregister(session.id)}
-            title="Unregister from this session"
-          >
+          <button className={BTN_GHOST} onClick={() => onUnregister(session.id)}>
             Unregister
           </button>
         ) : (
           <button
-            className={`${BTN_PRIMARY} ${isFull ? "opacity-55 cursor-not-allowed" : ""}`}
+            className={BTN_PRIMARY}
             onClick={() => onRegister(session.id)}
             disabled={isFull}
-            title={isFull ? "Session is full" : "Register"}
           >
             Register
           </button>
         )}
 
-        <button className={BTN_GHOST} onClick={() => onToggle(session.id)}>
-          {isOpen ? "Hide registered" : "Show registered"}
+        <button className={BTN_GHOST} onClick={() => onToggle(session.id)} aria-expanded={isOpen}>
+          {isOpen ? "Hide list" : "Who's going"}
         </button>
 
         {isOwner && (
-          <button
-            className={BTN_DANGER}
-            onClick={() => onDelete(session.id)}
-            title="Delete session"
-          >
-            Delete
+          <button className={`${BTN_DANGER} ml-auto`} onClick={() => onDelete(session.id)}>
+            Delete session
           </button>
         )}
       </div>
 
       {isOpen && <SignupsList signups={signups} />}
-    </div>
+    </article>
   );
 }

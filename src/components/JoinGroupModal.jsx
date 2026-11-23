@@ -23,7 +23,7 @@ export default function JoinGroupModal({ onSubmit, onClose, initialAccessCode = 
       await onSubmit({ accessCode: accessCode.trim(), nickname: nickname.trim() });
       onClose();
     } catch (err) {
-      setError(err.message || "Failed to join group.");
+      setError(err.message || "Couldn't join. Check the code and try again.");
     } finally {
       setBusy(false);
     }
@@ -32,14 +32,14 @@ export default function JoinGroupModal({ onSubmit, onClose, initialAccessCode = 
   return (
     <div className={MODAL_OVERLAY} onClick={onClose}>
       <div className={MODAL_CARD} onClick={(e) => e.stopPropagation()}>
-        <h3 className="text-lg font-bold m-0 mb-4 text-slate-900 dark:text-slate-100">
-          Join a Group
+        <h3 className="text-xl font-bold m-0 mb-2 text-fg">
+          Join a group
         </h3>
 
         {error && <div className={ERROR_BOX}>{error}</div>}
 
         <form onSubmit={handleSubmit}>
-          <label className={LABEL}>Access Code</label>
+          <label className={LABEL}>Access code</label>
           <input
             className={INPUT}
             placeholder="6-digit code"
@@ -49,7 +49,7 @@ export default function JoinGroupModal({ onSubmit, onClose, initialAccessCode = 
             maxLength={6}
           />
 
-          <label className={LABEL}>Your Nickname</label>
+          <label className={LABEL}>Your nickname</label>
           <input
             className={INPUT}
             placeholder="e.g., Jun"
@@ -60,7 +60,7 @@ export default function JoinGroupModal({ onSubmit, onClose, initialAccessCode = 
           <div className="flex justify-end gap-2.5 mt-5">
             <button type="button" className={BTN_GHOST} onClick={onClose}>Cancel</button>
             <button type="submit" className={BTN_PRIMARY} disabled={busy}>
-              {busy ? "Joining..." : "Join Group"}
+              {busy ? "Joining..." : "Join group"}
             </button>
           </div>
         </form>

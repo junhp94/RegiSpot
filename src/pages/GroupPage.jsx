@@ -7,8 +7,7 @@ import SessionCard from "../components/SessionCard";
 import CreateSessionModal from "../components/CreateSessionModal";
 import MembersPanel from "../components/MembersPanel";
 import Toast from "../components/Toast";
-import { BTN_PRIMARY } from "../lib/styles";
-import { getSportConfig } from "../lib/sportConfig";
+import { BTN_PRIMARY, ERROR_BOX } from "../lib/styles";
 import { SkeletonGrid, SkeletonLine } from "../components/Skeleton";
 import EmptyState from "../components/EmptyState";
 
@@ -21,6 +20,8 @@ export default function GroupPage() {
   const [groupLoading, setGroupLoading] = useState(true);
   const [tab, setTab] = useState("sessions");
   const [showCreateSession, setShowCreateSession] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [loadError, setLoadError] = useState("");
 
   const {
     sessions,
@@ -44,7 +45,7 @@ export default function GroupPage() {
         if (!cancelled) setGroup(data);
       } catch (e) {
         console.error("Failed to load group:", e);
-        if (!cancelled) navigate("/dashboard", { replace: true });
+        if (!cancelled) setLoadError(e.message || "Couldn't load the group.");
       } finally {
         if (!cancelled) setGroupLoading(false);
       }
@@ -65,20 +66,33 @@ export default function GroupPage() {
     );
   }
 
+  if (loadError) {
+    return (
+      <div className={ERROR_BOX}>
+        {loadError} Check your connection and reload the page.
+      </div>
+    );
+  }
+
   if (!group) return null;
 
   const isOwner = group.membership?.role === "owner";
-  const sportCfg = getSportConfig(group.sportType);
 
   async function handleCopyInviteLink() {
     const base = import.meta.env.BASE_URL.replace(/\/$/, "");
     const link = `${window.location.origin}${base}/join/${group.accessCode}`;
     try {
       await navigator.clipboard.writeText(link);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
     } catch {
       // fallback silently
     }
   }
+
+  const TAB = "h-11 px-1 mr-6 border-0 border-b-[3px] bg-transparent text-[15px] font-bold cursor-pointer";
+  const TAB_ON = `${TAB} border-accent text-fg`;
+  const TAB_OFF = `${TAB} border-transparent text-muted hover:text-fg`;
 
   return (
     <>
@@ -86,58 +100,48 @@ export default function GroupPage() {
 
       <div className="mb-5">
         <div className="flex items-center justify-between flex-wrap gap-3">
-          <h2 className="text-[22px] font-bold m-0 text-slate-900 dark:text-slate-100">
-            {sportCfg.emoji} {group.groupName}
-          </h2>
+          <h1 className="text-2xl font-bold m-0 text-fg">{group.groupName}</h1>
           {isOwner && (
-            <div className="flex gap-2">
-              <button className={BTN_PRIMARY} onClick={() => setShowCreateSession(true)}>
-                Create Session
-              </button>
-            </div>
+            <button className={BTN_PRIMARY} onClick={() => setShowCreateSession(true)}>
+              New session
+            </button>
           )}
         </div>
-        <div className="flex gap-3 flex-wrap mt-2 text-[13px] text-slate-900/65 dark:text-slate-400">
-          <span>{group.sportType}</span>
-          <span>{group.memberCount} member{group.memberCount !== 1 ? "s" : ""}</span>
-          <span>
-            Nickname: <strong className="text-slate-900 dark:text-slate-100">{group.membership?.nickname}</strong>
-          </span>
-          {isOwner && group.accessCode && (
-            <span className="flex items-center gap-2">
-              Access Code:{" "}
-              <span className="font-mono text-sm font-bold tracking-widest text-blue-600 dark:text-blue-400 bg-blue-600/10 dark:bg-blue-500/20 px-2 py-0.5 rounded-md">
-                {group.accessCode}
-              </span>
-              <button
-                onClick={handleCopyInviteLink}
-                className="text-xs text-blue-600 dark:text-blue-400 bg-blue-600/10 dark:bg-blue-500/20 border border-blue-600/20 dark:border-blue-400/25 rounded-md px-2 py-0.5 cursor-pointer hover:bg-blue-600/18 dark:hover:bg-blue-500/30 transition-colors"
-                title="Copy invite link"
-              >
-                Copy link
-              </button>
+        <p className="m-0 mt-1 text-[15px] text-muted">
+          {group.memberCount} member{group.memberCount !== 1 ? "s" : ""}. You're signed in as{" "}
+          <strong className="text-fg">{group.membership?.nickname}</strong>
+          {isOwner ? " (organizer)" : ""}.
+        </p>
+
+        {isOwner && group.accessCode && (
+          <div className="mt-3 flex items-center gap-3 flex-wrap text-[15px] text-fg">
+            <span>
+              Access code{" "}
+              <strong className="font-mono text-lg tracking-wider">{group.accessCode}</strong>
             </span>
-          )}
-        </div>
+            <button
+              onClick={handleCopyInviteLink}
+              className="h-8 px-3 rounded-md border border-line-strong bg-surface text-fg text-sm font-bold cursor-pointer hover:bg-subtle"
+            >
+              {copied ? "Link copied" : "Copy invite link"}
+            </button>
+          </div>
+        )}
       </div>
 
-      <div className="flex gap-1 mb-4">
+      <div className="flex border-b border-line mb-4" role="tablist">
         <button
-          className={`h-9 px-4 rounded-[10px] border font-semibold text-[13px] cursor-pointer transition-colors ${
-            tab === "sessions"
-              ? "bg-blue-600/10 dark:bg-blue-500/20 border-blue-600/18 dark:border-blue-400/25 text-blue-600 dark:text-blue-400"
-              : "bg-transparent border-slate-900/10 dark:border-slate-400/15 text-slate-900/65 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
-          }`}
+          role="tab"
+          aria-selected={tab === "sessions"}
+          className={tab === "sessions" ? TAB_ON : TAB_OFF}
           onClick={() => setTab("sessions")}
         >
           Sessions
         </button>
         <button
-          className={`h-9 px-4 rounded-[10px] border font-semibold text-[13px] cursor-pointer transition-colors ${
-            tab === "members"
-              ? "bg-blue-600/10 dark:bg-blue-500/20 border-blue-600/18 dark:border-blue-400/25 text-blue-600 dark:text-blue-400"
-              : "bg-transparent border-slate-900/10 dark:border-slate-400/15 text-slate-900/65 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
-          }`}
+          role="tab"
+          aria-selected={tab === "members"}
+          className={tab === "members" ? TAB_ON : TAB_OFF}
           onClick={() => setTab("members")}
         >
           Members
@@ -149,14 +153,13 @@ export default function GroupPage() {
           <SkeletonGrid count={4} />
         ) : sessions.length === 0 ? (
           <EmptyState
-            icon="📋"
-            title="No sessions yet"
-            description={isOwner ? "Create your first session to get started." : "No sessions have been created yet."}
-            actionLabel={isOwner ? "Create Session" : undefined}
+            title="No sessions scheduled"
+            description={isOwner ? "Add a date, time and place so members can register." : "When the owner adds a session, it will show up here."}
+            actionLabel={isOwner ? "New session" : undefined}
             onAction={isOwner ? () => setShowCreateSession(true) : undefined}
           />
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+          <div className="flex flex-col gap-3">
             {sessions.map((session) => (
               <SessionCard
                 key={session.id}

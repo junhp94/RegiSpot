@@ -26,69 +26,58 @@ export default function MembersPanel({ groupId, isOwner, onLeft }) {
   }, [groupId, accessToken]);
 
   async function handleKick(targetUserId) {
-    if (!confirm("Are you sure you want to remove this member?")) return;
+    if (!confirm("Remove this member from the group?")) return;
     try {
       await kickMember(groupId, targetUserId, accessToken);
       setMembers((prev) => prev.filter((m) => m.userId !== targetUserId));
     } catch (e) {
-      alert(e.message || "Failed to kick member.");
+      alert(e.message || "Couldn't remove member.");
     }
   }
 
   async function handleLeave() {
-    if (!confirm("Are you sure you want to leave this group?")) return;
+    if (!confirm("Leave this group?")) return;
     try {
       await leaveGroup(groupId, accessToken);
       if (onLeft) onLeft();
     } catch (e) {
-      alert(e.message || "Failed to leave group.");
+      alert(e.message || "Couldn't leave group.");
     }
   }
 
   if (loading) {
     return (
-      <div className="flex flex-col gap-2">
+      <div className="rounded-md border border-line bg-surface px-4 py-2">
         {[1, 2, 3].map((i) => (
-          <div key={i} className="flex items-center px-3.5 py-3 rounded-xl bg-white/72 dark:bg-slate-800/80 border border-slate-900/10 dark:border-slate-400/15">
-            <SkeletonLine width="60%" />
-          </div>
+          <SkeletonLine key={i} width="50%" />
         ))}
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col gap-2">
+    <ul className="m-0 p-0 list-none rounded-md border border-line bg-surface divide-y divide-line">
       {members.map((m) => (
-        <div
-          className="flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-white/72 dark:bg-slate-800/80 border border-slate-900/10 dark:border-slate-400/15"
-          key={m.userId}
-        >
-          <div className="flex items-center gap-2.5">
-            <span className="w-[22px] h-[22px] rounded-full grid place-items-center text-xs font-extrabold text-blue-600 dark:text-blue-400 bg-blue-600/12 dark:bg-blue-500/20 border border-blue-600/18 dark:border-blue-400/25">
-              {(m.nickname || "?").slice(0, 1).toUpperCase()}
-            </span>
-            <span className="font-semibold text-sm text-slate-900 dark:text-slate-100">
-              {m.nickname}
-            </span>
-            <span className="text-xs text-slate-900/65 dark:text-slate-400">
-              ({m.role})
-            </span>
+        <li className="flex items-center justify-between gap-3 px-4 py-3" key={m.userId}>
+          <div>
+            <span className="font-bold text-fg">{m.nickname}</span>
+            {m.role === "owner" && <span className="ml-2 text-sm text-muted">Owner</span>}
+            {m.userId === user?.userId && <span className="ml-2 text-sm text-muted">(you)</span>}
           </div>
           <div>
             {isOwner && m.role !== "owner" && (
               <button className={BTN_DANGER} onClick={() => handleKick(m.userId)}>
-                Kick
+                Remove
               </button>
             )}
             {!isOwner && m.userId === user?.userId && (
               <button className={BTN_DANGER} onClick={handleLeave}>
-                Leave
+                Leave group
               </button>
             )}
           </div>
-        </div>
+        </li>
       ))}
-    </div>
+    </ul>
   );
 }

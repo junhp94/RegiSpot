@@ -9,9 +9,7 @@ export default function Logo({ className = "" }) {
   const [failed, setFailed] = useState(false);
 
   return (
-    <div
-      className={`w-11 h-11 rounded-[14px] grid place-items-center overflow-hidden bg-white/70 dark:bg-slate-700/60 border border-slate-900/10 dark:border-slate-400/15 shadow-md shadow-slate-900/8 ${className}`}
-    >
+    <div className={`w-9 h-9 rounded-md grid place-items-center overflow-hidden ${className}`}>
       {failed ? (
         "🏸"
       ) : (

@@ -30,7 +30,7 @@ export default function CreateGroupModal({ onSubmit, onClose }) {
       await onSubmit({ groupName: groupName.trim(), sportType, maxMembers, nickname: nickname.trim() });
       onClose();
     } catch (err) {
-      setError(err.message || "Failed to create group.");
+      setError(err.message || "Couldn't create the group. Try again.");
     } finally {
       setBusy(false);
     }
@@ -39,14 +39,14 @@ export default function CreateGroupModal({ onSubmit, onClose }) {
   return (
     <div className={MODAL_OVERLAY} onClick={onClose}>
       <div className={MODAL_CARD} onClick={(e) => e.stopPropagation()}>
-        <h3 className="text-lg font-bold m-0 mb-4 text-slate-900 dark:text-slate-100">
-          Create a Group
+        <h3 className="text-xl font-bold m-0 mb-2 text-fg">
+          New group
         </h3>
 
         {error && <div className={ERROR_BOX}>{error}</div>}
 
         <form onSubmit={handleSubmit}>
-          <label className={LABEL}>Group Name</label>
+          <label className={LABEL}>Group name</label>
           <input
             className={INPUT}
             placeholder="e.g., Tuesday Badminton"
@@ -54,7 +54,7 @@ export default function CreateGroupModal({ onSubmit, onClose }) {
             onChange={(e) => setGroupName(e.target.value)}
           />
 
-          <label className={LABEL}>Sport Type</label>
+          <label className={LABEL}>Sport</label>
           <select
             className={INPUT}
             value={sportType}
@@ -65,7 +65,7 @@ export default function CreateGroupModal({ onSubmit, onClose }) {
             ))}
           </select>
 
-          <label className={LABEL}>Max Members</label>
+          <label className={LABEL}>Member limit</label>
           <select
             className={INPUT}
             value={maxMembers}
@@ -76,7 +76,7 @@ export default function CreateGroupModal({ onSubmit, onClose }) {
             ))}
           </select>
 
-          <label className={LABEL}>Your Nickname</label>
+          <label className={LABEL}>Your nickname</label>
           <input
             className={INPUT}
             placeholder="e.g., Jun"
@@ -87,7 +87,7 @@ export default function CreateGroupModal({ onSubmit, onClose }) {
           <div className="flex justify-end gap-2.5 mt-5">
             <button type="button" className={BTN_GHOST} onClick={onClose}>Cancel</button>
             <button type="submit" className={BTN_PRIMARY} disabled={busy}>
-              {busy ? "Creating..." : "Create Group"}
+              {busy ? "Creating..." : "Create group"}
             </button>
           </div>
         </form>
