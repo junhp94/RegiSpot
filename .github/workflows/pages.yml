@@ -15,11 +15,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build-and-deploy:
+  # Build and deploy are separate jobs (GitHub's recommended layout): the deploy
+  # job starts only after the artifact upload has fully finished, avoiding
+  # "No artifacts named github-pages were found" when both run in one job.
+  build:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
 
@@ -49,5 +49,12 @@ jobs:
         with:
           path: dist
 
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
       - id: deployment
         uses: actions/deploy-pages@v4
