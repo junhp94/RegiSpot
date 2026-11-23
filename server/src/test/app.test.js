@@ -29,7 +29,7 @@ process.env.NODE_ENV = "test"; // disables the auth rate limiter for this suite
 
 // Dynamic import AFTER dotenv so db.js sees DATABASE_URL
 const { default: app } = await import("../app.js");
-const { vancouverToday, addDays } = await import("../lib/vancouverTime.js");
+const { vancouverToday, addDays, weekdayOf } = await import("../lib/vancouverTime.js");
 
 // Vancouver date offset from today — sessions must be inside the 5-day window to register.
 const vanDate = (offsetDays) => addDays(vancouverToday(new Date()), offsetDays);
@@ -464,6 +464,83 @@ describe("kick and leave respect the waitlist", async () => {
     assert.equal(await count(), 1);
     const list = (await api("GET", signupsPath(g, sid), null, g.owner.token)).body;
     assert.deepEqual(list.registered.map((x) => x.nickname), ["Owner"]);
+  });
+});
+
+// ── weekly schedules & generation ────────────────────────────────────────────
+describe("schedules", async () => {
+  let g, scheduleId;
+  const w = weekdayOf(vanDate(2));
+  const base = (g) => `/groups/${g.groupId}/schedules`;
+  const rows = async () =>
+    (await directPool.query(
+      "SELECT id, date, location FROM sessions WHERE schedule_id=$1 ORDER BY date", [scheduleId])).rows;
+
+  before(async () => { g = await makeGroup("sch", 1); });
+  after(() => cleanup(g.emails));
+
+  it("member cannot create a schedule → 403", async () => {
+    const r = await api("POST", base(g), { weekday: w, startTime: "20:00", endTime: "22:00", location: "Gym", courtCount: 2, capacity: 13 }, g.members[0].token);
+    assert.equal(r.status, 403);
+  });
+
+  it("invalid weekday 7 → 400", async () => {
+    const r = await api("POST", base(g), { weekday: 7, startTime: "20:00", endTime: "22:00", location: "Gym", courtCount: 2, capacity: 13 }, g.owner.token);
+    assert.equal(r.status, 400);
+  });
+
+  it("owner creates a schedule; GET sessions generates the next 4 weeks", async () => {
+    const r = await api("POST", base(g), { weekday: w, startTime: "20:00", endTime: "22:00", location: "Gym", courtCount: 2, capacity: 13 }, g.owner.token);
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    scheduleId = r.body.id;
+    assert.equal(r.body.openDaysBefore, 5);
+    assert.equal(r.body.active, true);
+    await api("GET", `/groups/${g.groupId}/sessions`, null, g.owner.token);
+    const list = await rows();
+    assert.deepEqual(list.map((x) => x.date), [vanDate(2), vanDate(9), vanDate(16), vanDate(23)]);
+    const first = (await directPool.query("SELECT * FROM sessions WHERE id=$1", [list[0].id])).rows[0];
+    assert.equal(first.time, "20:00");
+    assert.equal(first.end_time, "22:00");
+    assert.equal(first.capacity, 13);
+    assert.equal(first.court_count, 2);
+  });
+
+  it("generation is idempotent", async () => {
+    await api("GET", `/groups/${g.groupId}/sessions`, null, g.members[0].token);
+    assert.equal((await rows()).length, 4);
+  });
+
+  it("GET schedules lists it", async () => {
+    const r = await api("GET", base(g), null, g.members[0].token);
+    assert.equal(r.status, 200);
+    assert.deepEqual(r.body.map((x) => [x.weekday, x.startTime, x.capacity]), [[w, "20:00", 13]]);
+  });
+
+  it("PATCH location updates future sessions without signups, not one with a signup", async () => {
+    const first = (await rows())[0];
+    assert.equal((await api("POST", signupPath(g, first.id), {}, g.members[0].token)).status, 200);
+    const r = await api("PATCH", `${base(g)}/${scheduleId}`, { location: "New Gym" }, g.owner.token);
+    assert.equal(r.status, 200);
+    assert.deepEqual((await rows()).map((x) => x.location), ["Gym", "New Gym", "New Gym", "New Gym"]);
+  });
+
+  it("changing weekday moves future empty sessions to the new day", async () => {
+    const w2 = weekdayOf(vanDate(3));
+    const r = await api("PATCH", `${base(g)}/${scheduleId}`, { weekday: w2 }, g.owner.token);
+    assert.equal(r.status, 200);
+    await api("GET", `/groups/${g.groupId}/sessions`, null, g.owner.token);
+    // the signed-up vanDate(2) session stays; the rest move to the new weekday
+    assert.deepEqual((await rows()).map((x) => x.date), [vanDate(2), vanDate(3), vanDate(10), vanDate(17), vanDate(24)]);
+    await api("PATCH", `${base(g)}/${scheduleId}`, { weekday: w }, g.owner.token);
+  });
+
+  it("pausing deletes future empty sessions, keeps one with a signup, and stops generation", async () => {
+    const r = await api("PATCH", `${base(g)}/${scheduleId}`, { active: false }, g.owner.token);
+    assert.equal(r.status, 200);
+    assert.equal(r.body.active, false);
+    assert.deepEqual((await rows()).map((x) => x.date), [vanDate(2)]);
+    await api("GET", `/groups/${g.groupId}/sessions`, null, g.owner.token);
+    assert.equal((await rows()).length, 1);
   });
 });
 

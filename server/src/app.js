@@ -10,6 +10,7 @@ import { groupsRouter } from "./routes/groups.js";
 import { sessionsRouter } from "./routes/sessions.js";
 import { signupsRouter } from "./routes/signups.js";
 import { membersRouter } from "./routes/members.js";
+import { schedulesRouter } from "./routes/schedules.js";
 
 // ALLOWED_ORIGINS is a comma-separated list so we can allow multiple origins
 // (e.g. GitHub Pages + localhost) without duplicating environment entries.
@@ -67,5 +68,8 @@ app.use("/groups/:groupId/sessions/:sessionId", signupsRouter);
 
 // Members — /leave is registered before /:userId inside the router
 app.use("/groups/:groupId/members", membersRouter);
+
+// Weekly schedules (owner manages; sessions are generated from them)
+app.use("/groups/:groupId/schedules", schedulesRouter);
 
 export default app;

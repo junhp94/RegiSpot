@@ -5,6 +5,7 @@
 import { Router } from "express";
 import { randomBytes } from "crypto";
 import pool from "../lib/db.js";
+import { ensureSessions } from "../lib/generateSessions.js";
 import {
   sanitizeString,
   isValidMatchFormat,
@@ -26,6 +27,8 @@ sessionsRouter.get("/", async (req, res) => {
       [groupId, userId]
     );
     if (!memberRes.rows[0]) return res.status(403).json({ error: "You are not a member of this group" });
+
+    await ensureSessions(pool, groupId, new Date());
 
     const sessRes = await pool.query(
       `SELECT id, date, time, location, capacity, signed_up_count,
