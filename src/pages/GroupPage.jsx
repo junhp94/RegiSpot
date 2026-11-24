@@ -63,6 +63,7 @@ export default function GroupPage() {
     createSession,
     deleteSession,
     toggleSignups,
+    refreshAllSignups,
     clearToast,
   } = useSessions(groupId, view);
 
@@ -249,6 +250,7 @@ export default function GroupPage() {
           groupId={groupId}
           isOwner={isOwner}
           onRenamed={(uid, nickname) => {
+            refreshAllSignups();
             if (uid === user?.userId) {
               setGroup((g) => ({ ...g, membership: { ...g.membership, nickname } }));
             }
