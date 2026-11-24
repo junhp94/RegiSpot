@@ -1,6 +1,7 @@
 /**
  * Member routes — mounted at /groups/:groupId/members
  *   GET    /           → list members
+ *   PATCH  /:userId    → change nickname (self, or anyone if owner)
  *   POST   /leave      → leave group (registered BEFORE /:userId to avoid conflict)
  *   DELETE /:userId    → kick member
  *
@@ -12,6 +13,7 @@ import { Router } from "express";
 import pool from "../lib/db.js";
 import { removeUserSignupsInGroup } from "../lib/signupQueue.js";
 import { sessionTimes, vancouverToday } from "../lib/vancouverTime.js";
+import { sanitizeString, isValidNickname } from "../lib/validators.js";
 
 export const membersRouter = Router({ mergeParams: true });
 
@@ -36,6 +38,58 @@ membersRouter.get("/", async (req, res) => {
   } catch (err) {
     console.error("getMembers error:", err);
     res.status(500).json({ error: "Server error" });
+  }
+});
+
+// PATCH /groups/:groupId/members/:targetUserId  { nickname }
+// A member may rename themselves; the owner may rename anyone. Also renames the
+// target's own signups for today's and upcoming sessions (past rows keep the old name).
+membersRouter.patch("/:targetUserId", async (req, res) => {
+  const { groupId, targetUserId } = req.params;
+  const { userId } = req.user;
+
+  const callerRes = await pool.query(
+    "SELECT role FROM members WHERE group_id = $1 AND user_id = $2",
+    [groupId, userId]
+  );
+  if (!callerRes.rows[0]) return res.status(403).json({ error: "You are not a member of this group" });
+  if (targetUserId !== userId && callerRes.rows[0].role !== "owner") {
+    return res.status(403).json({ error: "You can only change your own nickname" });
+  }
+
+  const cleanNickname = sanitizeString(req.body?.nickname, 30);
+  if (!cleanNickname || !isValidNickname(cleanNickname)) {
+    return res.status(400).json({ error: "A valid nickname is required (1-30 characters)" });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const upd = await client.query(
+      "UPDATE members SET nickname = $1, nickname_lower = $2 WHERE group_id = $3 AND user_id = $4",
+      [cleanNickname, cleanNickname.toLowerCase(), groupId, targetUserId]
+    );
+    if (upd.rowCount === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ error: "Member not found" });
+    }
+    await client.query(
+      `UPDATE signups su SET nickname = $1
+       FROM sessions s
+       WHERE su.session_id = s.id AND s.group_id = $2 AND su.user_id = $3 AND s.date >= $4`,
+      [cleanNickname, groupId, targetUserId, vancouverToday(new Date())]
+    );
+    await client.query("COMMIT");
+    res.json({ userId: targetUserId, nickname: cleanNickname });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    if (err.code === "23505") {
+      return res.status(409).json({ error: "Nickname is already taken in this group" });
+    }
+    console.error("updateNickname error:", err);
+    res.status(500).json({ error: "Server error" });
+  } finally {
+    client.release();
   }
 });
 

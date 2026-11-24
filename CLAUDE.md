@@ -74,6 +74,7 @@ DELETE /groups/:id/sessions/:sessionId/signup
 GET    /groups/:id/sessions/:sessionId/signups
 GET    /groups/:id/members
 POST   /groups/:id/members/leave
+PATCH  /groups/:id/members/:userId
 DELETE /groups/:id/members/:userId
 GET    /health
 ```
