@@ -217,6 +217,18 @@ export async function getMembers(groupId, accessToken) {
   return readJson(res, []);
 }
 
+export async function updateNickname(groupId, userId, nickname, accessToken) {
+  const res = await fetch(
+    `${API_BASE}/groups/${encodeURIComponent(groupId)}/members/${encodeURIComponent(userId)}`,
+    {
+      method: "PATCH",
+      headers: authHeaders(accessToken),
+      body: JSON.stringify({ nickname }),
+    }
+  );
+  return readJson(res, {});
+}
+
 export async function kickMember(groupId, userId, accessToken) {
   const res = await fetch(
     `${API_BASE}/groups/${encodeURIComponent(groupId)}/members/${encodeURIComponent(userId)}`,
