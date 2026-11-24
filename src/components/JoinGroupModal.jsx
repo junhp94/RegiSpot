@@ -49,10 +49,10 @@ export default function JoinGroupModal({ onSubmit, onClose, initialAccessCode = 
             maxLength={6}
           />
 
-          <label className={LABEL}>Your nickname</label>
+          <label className={LABEL}>Your nickname (Korean name / 한국 이름)</label>
           <input
             className={INPUT}
-            placeholder="e.g., Jun"
+            placeholder="e.g., 김민수"
             value={nickname}
             onChange={(e) => setNickname(e.target.value)}
           />

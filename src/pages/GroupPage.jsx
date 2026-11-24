@@ -35,7 +35,7 @@ const CHIP_OFF = `${CHIP} border-line-strong bg-surface text-fg hover:bg-subtle`
 export default function GroupPage() {
   const { groupId } = useParams();
   const navigate = useNavigate();
-  const { accessToken } = useAuth();
+  const { accessToken, user } = useAuth();
 
   const [group, setGroup] = useState(null);
   const [groupLoading, setGroupLoading] = useState(true);
@@ -63,6 +63,7 @@ export default function GroupPage() {
     createSession,
     deleteSession,
     toggleSignups,
+    refreshAllSignups,
     clearToast,
   } = useSessions(groupId, view);
 
@@ -248,6 +249,12 @@ export default function GroupPage() {
         <MembersPanel
           groupId={groupId}
           isOwner={isOwner}
+          onRenamed={(uid, nickname) => {
+            refreshAllSignups();
+            if (uid === user?.userId) {
+              setGroup((g) => ({ ...g, membership: { ...g.membership, nickname } }));
+            }
+          }}
           onLeft={() => navigate("/dashboard", { replace: true })}
         />
       )}

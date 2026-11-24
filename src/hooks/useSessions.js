@@ -85,6 +85,19 @@ export default function useSessions(groupId, view = "upcoming") {
     }
   }
 
+  // A nickname changed: every cached list may show the old name.
+  // Drop them all and refetch the open one.
+  async function refreshAllSignups() {
+    setSignupsBySession({});
+    if (!openSessionId) return;
+    try {
+      const data = await getSignups(groupId, openSessionId, accessToken);
+      setSignupsBySession((prev) => ({ ...prev, [openSessionId]: data }));
+    } catch (e) {
+      setToast({ type: "error", text: e.message || "Failed to load signups." });
+    }
+  }
+
   // Runs an action, refreshes the card and its list, and toasts the outcome.
   async function act(sessionId, fn, successText, failText) {
     try {
@@ -222,6 +235,7 @@ export default function useSessions(groupId, view = "upcoming") {
     loading,
     openSessionId,
     signupsBySession,
+    refreshAllSignups,
     toast,
     setToast,
     signup,

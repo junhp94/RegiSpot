@@ -949,3 +949,117 @@ describe("kick and leave cleanup", async () => {
     assert.equal(r.status, 400);
   });
 });
+
+// ── edit nickname ────────────────────────────────────────────────────────────
+describe("edit nickname", async () => {
+  let g;
+  const rename = (uid, nickname, token) =>
+    api("PATCH", `/groups/${g.groupId}/members/${uid}`, { nickname }, token);
+  const nickOf = async (uid) =>
+    (await api("GET", `/groups/${g.groupId}/members`, null, g.owner.token)).body.find((m) => m.userId === uid).nickname;
+
+  before(async () => { g = await makeGroup("nick", 4); });
+  after(() => cleanup(g.emails));
+
+  it("member renames self → 200, members list shows new name", async () => {
+    const [A] = g.members;
+    const r = await rename(A.id, "김민수", A.token);
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    assert.deepEqual(r.body, { userId: A.id, nickname: "김민수" });
+    assert.equal(await nickOf(A.id), "김민수");
+  });
+
+  it("owner renames a member → 200", async () => {
+    const B = g.members[1];
+    const r = await rename(B.id, "이서연", g.owner.token);
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    assert.equal(await nickOf(B.id), "이서연");
+  });
+
+  it("owner renames self → 200", async () => {
+    const r = await rename(g.owner.id, "박지훈", g.owner.token);
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    assert.equal(await nickOf(g.owner.id), "박지훈");
+  });
+
+  it("member renames someone else → 403", async () => {
+    const r = await rename(g.members[2].id, "남의이름", g.members[1].token);
+    assert.equal(r.status, 403);
+    assert.equal(await nickOf(g.members[2].id), "Nick2");
+  });
+
+  it("unknown target → 404", async () => {
+    const r = await rename("00000000-0000-0000-0000-000000000000", "누구", g.owner.token);
+    assert.equal(r.status, 404);
+  });
+
+  it("non-member caller → 403", async () => {
+    const email = `test.nick.outsider.${Date.now()}@example.com`;
+    g.emails.push(email);
+    const reg = await api("POST", "/auth/register", { email, password: "Password1!", name: "Outsider" });
+    const r = await rename(g.members[2].id, "외부인", reg.body.token);
+    assert.equal(r.status, 403);
+  });
+
+  it("invalid nickname → 400", async () => {
+    const C = g.members[2];
+    for (const bad of ["", "   ", "bad<name>"]) {
+      const r = await rename(C.id, bad, C.token);
+      assert.equal(r.status, 400, `expected 400 for ${JSON.stringify(bad)}`);
+    }
+    assert.equal(await nickOf(C.id), "Nick2");
+  });
+
+  it("over 30 characters is trimmed to 30, same as join", async () => {
+    const C = g.members[2];
+    const r = await rename(C.id, "a".repeat(31), C.token);
+    assert.equal(r.status, 200);
+    assert.equal(r.body.nickname, "a".repeat(30));
+  });
+
+  it("name taken by another member (any case) → 409", async () => {
+    const C = g.members[2];
+    await rename(C.id, "Nick2", C.token);
+    const r = await rename(C.id, "NICK3", C.token); // members[3] is "Nick3"
+    assert.equal(r.status, 409);
+    assert.match(r.body.error, /taken/i);
+    assert.equal(await nickOf(C.id), "Nick2");
+  });
+
+  it("case-only change of own name → 200", async () => {
+    const C = g.members[2];
+    const r = await rename(C.id, "NICK2", C.token);
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    assert.equal(await nickOf(C.id), "NICK2");
+  });
+
+  it("today's and upcoming signups show new name, past keeps old", async () => {
+    const D = g.members[3];
+    const today = await makeSession(g, { date: vanDate(0), time: "23:59", capacity: 5 });
+    const fut = await makeSession(g, { date: vanDate(1), time: "20:00", capacity: 5 });
+    const past = await makeSession(g, { date: vanDate(-1), time: "10:00", capacity: 5 });
+    assert.equal((await api("POST", signupPath(g, fut), {}, D.token)).status, 200);
+    for (const sid of [today, past]) {
+      await directPool.query(
+        "INSERT INTO signups (session_id, user_id, nickname, status) VALUES ($1,$2,'Nick3','registered')",
+        [sid, D.id]);
+    }
+    assert.equal((await rename(D.id, "최유나", D.token)).status, 200);
+    for (const sid of [today, fut]) {
+      const list = (await api("GET", signupsPath(g, sid), null, g.owner.token)).body;
+      assert.deepEqual(list.registered.map((x) => x.nickname), ["최유나"]);
+    }
+    const old = await directPool.query("SELECT nickname FROM signups WHERE session_id=$1 AND user_id=$2", [past, D.id]);
+    assert.equal(old.rows[0].nickname, "Nick3");
+  });
+
+  it("guest's guestOf shows host's new name", async () => {
+    const H = g.members[0];
+    const fut = await makeSession(g, { date: vanDate(2), time: "20:00", capacity: 5 });
+    assert.equal((await api("POST", signupPath(g, fut), { guestName: "Sena" }, H.token)).status, 200);
+    assert.equal((await rename(H.id, "정하늘", H.token)).status, 200);
+    const list = (await api("GET", signupsPath(g, fut), null, g.owner.token)).body;
+    const guest = list.registered.find((x) => x.isGuest);
+    assert.equal(guest.guestOf, "정하늘");
+  });
+});
