@@ -183,6 +183,41 @@ describe("change password", async () => {
   });
 });
 
+// ── admin reset-password script ───────────────────────────────────────────────
+describe("reset password script", async () => {
+  const ts = Date.now();
+  const email = `rp-${ts}@test.com`;
+  const adminId = `rpadmin${ts}`;
+  let resetPassword;
+  before(async () => {
+    ({ resetPassword } = await import("../lib/resetPassword.js"));
+    await api("POST", "/auth/register", { email, password: "oldpass123", name: "RP" });
+    await directPool.query(
+      "INSERT INTO users (email, name, password_hash) VALUES ($1, 'Admin', 'x')", [adminId]);
+  });
+  after(() => cleanup([email, adminId]));
+
+  it("short password rejected, hash unchanged", async () => {
+    await assert.rejects(resetPassword(directPool, email, "short"), /at least 8/);
+    assert.equal((await api("POST", "/auth/login", { email, password: "oldpass123" })).status, 200);
+  });
+
+  it("unknown email rejected", async () => {
+    await assert.rejects(resetPassword(directPool, `nobody-${ts}@test.com`, "temp12345"), /No user/);
+  });
+
+  it("resets password, case-insensitive email", async () => {
+    const r = await resetPassword(directPool, email.toUpperCase(), "temp12345");
+    assert.equal(r.email, email);
+    assert.equal((await api("POST", "/auth/login", { email, password: "temp12345" })).status, 200);
+  });
+
+  it("works for an identifier without @", async () => {
+    await resetPassword(directPool, adminId, "adminpass99");
+    assert.equal((await api("POST", "/auth/login", { email: adminId, password: "adminpass99" })).status, 200);
+  });
+});
+
 // ── groups ────────────────────────────────────────────────────────────────────
 describe("groups", async () => {
   const ownerEmail = `test.owner.${Date.now()}@example.com`;
