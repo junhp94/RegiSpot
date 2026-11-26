@@ -31,6 +31,9 @@ export default function AuthButton() {
 
   if (loading || !isAuthenticated) return null;
 
+  // The admin signs in with a username (no "@"); its password is managed on Render.
+  const isMember = user.email.includes("@");
+
   return (
     <div className="relative" ref={ref}>
       <button
@@ -49,13 +52,15 @@ export default function AuthButton() {
           <div className="px-3 py-2 text-sm text-muted border-b border-line overflow-hidden text-ellipsis whitespace-nowrap">
             {user.email}
           </div>
-          <button
-            role="menuitem"
-            className={MENU_ITEM}
-            onClick={() => { setMenuOpen(false); setShowModal(true); }}
-          >
-            Change password
-          </button>
+          {isMember && (
+            <button
+              role="menuitem"
+              className={MENU_ITEM}
+              onClick={() => { setMenuOpen(false); setShowModal(true); }}
+            >
+              Change password
+            </button>
+          )}
           <button role="menuitem" className={MENU_ITEM} onClick={logout}>
             Sign out
           </button>

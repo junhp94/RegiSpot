@@ -174,6 +174,23 @@ describe("change password", async () => {
     assert.equal((await api("POST", "/auth/login", { email, password: "oldpass123" })).status, 401);
   });
 
+  it("admin account → 403 (password is managed by ADMIN_PASSWORD on Render)", async () => {
+    const adminName = `cpadmin${ts}`;
+    const hash = (await directPool.query("SELECT password_hash FROM users WHERE lower(email)=lower($1)", [email])).rows[0].password_hash;
+    await directPool.query("INSERT INTO users (email, name, password_hash) VALUES ($1, 'Admin', $2)", [adminName, hash]);
+    const prev = process.env.ADMIN_USERNAME;
+    process.env.ADMIN_USERNAME = adminName;
+    try {
+      const login = await api("POST", "/auth/login", { email: adminName, password: "newpass456" });
+      const r = await api("POST", "/auth/change-password",
+        { currentPassword: "newpass456", newPassword: "another789" }, login.body.token);
+      assert.equal(r.status, 403);
+    } finally {
+      if (prev === undefined) delete process.env.ADMIN_USERNAME; else process.env.ADMIN_USERNAME = prev;
+      await cleanup([adminName]);
+    }
+  });
+
   it("deleted user → 404", async () => {
     const reg = await api("POST", "/auth/register", { email: goneEmail, password: "oldpass123", name: "Gone" });
     await directPool.query("DELETE FROM users WHERE lower(email)=lower($1)", [goneEmail]);
@@ -212,9 +229,8 @@ describe("reset password script", async () => {
     assert.equal((await api("POST", "/auth/login", { email, password: "temp12345" })).status, 200);
   });
 
-  it("works for an identifier without @", async () => {
-    await resetPassword(directPool, adminId, "adminpass99");
-    assert.equal((await api("POST", "/auth/login", { email: adminId, password: "adminpass99" })).status, 200);
+  it("refuses the admin username (no @) — its password is reseeded from Render on boot", async () => {
+    await assert.rejects(resetPassword(directPool, adminId, "adminpass99"), /ADMIN_PASSWORD/);
   });
 });
 

@@ -9,7 +9,7 @@ import jwt from "jsonwebtoken";
 import rateLimit from "express-rate-limit";
 import pool from "../lib/db.js";
 import { sanitizeString } from "../lib/validators.js";
-import { canCreateGroups } from "../lib/permissions.js";
+import { canCreateGroups, adminUsername } from "../lib/permissions.js";
 
 // Public user shape returned by register/login/me
 function publicUser(id, email, name) {
@@ -130,6 +130,12 @@ authRouter.get("/me", async (req, res) => {
 authRouter.post("/change-password", async (req, res) => {
   const payload = tokenPayload(req);
   if (!payload) return res.status(401).json({ error: "Invalid or expired token" });
+
+  // migrate.js reseeds the admin hash from ADMIN_PASSWORD on every boot, so a
+  // change here would silently revert. Admin password is managed on Render.
+  if (adminUsername() && String(payload.email || "").toLowerCase() === adminUsername()) {
+    return res.status(403).json({ error: "The admin password is set by ADMIN_PASSWORD on Render" });
+  }
 
   const { currentPassword, newPassword } = req.body || {};
   if (typeof currentPassword !== "string" || !currentPassword) {
