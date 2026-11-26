@@ -106,16 +106,52 @@ authRouter.post("/login", async (req, res) => {
   }
 });
 
-// GET /auth/me — verify token and return current user (used by AuthContext on page load)
-authRouter.get("/me", async (req, res) => {
+// Returns the verified JWT payload from the Bearer header, or null
+function tokenPayload(req) {
   const header = req.headers["authorization"] || "";
   const token = header.startsWith("Bearer ") ? header.slice(7) : null;
-  if (!token) return res.status(401).json({ error: "Authentication required" });
+  if (!token) return null;
+  try {
+    return jwt.verify(token, process.env.JWT_SECRET);
+  } catch {
+    return null;
+  }
+}
+
+// GET /auth/me — verify token and return current user (used by AuthContext on page load)
+authRouter.get("/me", async (req, res) => {
+  const payload = tokenPayload(req);
+  if (!payload) return res.status(401).json({ error: "Invalid or expired token" });
+  res.json(publicUser(payload.sub, payload.email, payload.name));
+});
+
+// POST /auth/change-password — signed-in user changes their own password.
+// Existing tokens stay valid (stateless JWTs); the caller stays signed in.
+authRouter.post("/change-password", async (req, res) => {
+  const payload = tokenPayload(req);
+  if (!payload) return res.status(401).json({ error: "Invalid or expired token" });
+
+  const { currentPassword, newPassword } = req.body || {};
+  if (typeof currentPassword !== "string" || !currentPassword) {
+    return res.status(400).json({ error: "Current password is required" });
+  }
+  if (typeof newPassword !== "string" || newPassword.length < 8) {
+    return res.status(400).json({ error: "Password must be at least 8 characters" });
+  }
 
   try {
-    const payload = jwt.verify(token, process.env.JWT_SECRET);
-    res.json(publicUser(payload.sub, payload.email, payload.name));
-  } catch {
-    res.status(401).json({ error: "Invalid or expired token" });
+    const result = await pool.query("SELECT password_hash FROM users WHERE id = $1", [payload.sub]);
+    const user = result.rows[0];
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    const match = await bcrypt.compare(currentPassword, user.password_hash);
+    if (!match) return res.status(401).json({ error: "Current password is incorrect" });
+
+    const hash = await bcrypt.hash(newPassword, 10);
+    await pool.query("UPDATE users SET password_hash = $1 WHERE id = $2", [hash, payload.sub]);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("change-password error:", err);
+    res.status(500).json({ error: "Server error" });
   }
 });

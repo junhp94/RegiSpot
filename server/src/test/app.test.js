@@ -129,6 +129,60 @@ describe("auth", async () => {
   });
 });
 
+// ── change password ───────────────────────────────────────────────────────────
+describe("change password", async () => {
+  const ts = Date.now();
+  const email = `cp-${ts}@test.com`;
+  const goneEmail = `cp-gone-${ts}@test.com`;
+  let token;
+  before(async () => {
+    const r = await api("POST", "/auth/register", { email, password: "oldpass123", name: "CP" });
+    token = r.body.token;
+  });
+  after(() => cleanup([email, goneEmail]));
+
+  it("wrong current password → 401", async () => {
+    const r = await api("POST", "/auth/change-password",
+      { currentPassword: "nope-nope", newPassword: "newpass456" }, token);
+    assert.equal(r.status, 401);
+    assert.equal(r.body.error, "Current password is incorrect");
+  });
+
+  it("short new password → 400", async () => {
+    const r = await api("POST", "/auth/change-password",
+      { currentPassword: "oldpass123", newPassword: "short" }, token);
+    assert.equal(r.status, 400);
+  });
+
+  it("missing currentPassword → 400", async () => {
+    const r = await api("POST", "/auth/change-password", { newPassword: "whatever99" }, token);
+    assert.equal(r.status, 400);
+  });
+
+  it("no token → 401", async () => {
+    const r = await api("POST", "/auth/change-password",
+      { currentPassword: "oldpass123", newPassword: "newpass456" });
+    assert.equal(r.status, 401);
+  });
+
+  it("changes password; new works, old fails", async () => {
+    const r = await api("POST", "/auth/change-password",
+      { currentPassword: "oldpass123", newPassword: "newpass456" }, token);
+    assert.equal(r.status, 200);
+    assert.equal(r.body.ok, true);
+    assert.equal((await api("POST", "/auth/login", { email, password: "newpass456" })).status, 200);
+    assert.equal((await api("POST", "/auth/login", { email, password: "oldpass123" })).status, 401);
+  });
+
+  it("deleted user → 404", async () => {
+    const reg = await api("POST", "/auth/register", { email: goneEmail, password: "oldpass123", name: "Gone" });
+    await directPool.query("DELETE FROM users WHERE lower(email)=lower($1)", [goneEmail]);
+    const r = await api("POST", "/auth/change-password",
+      { currentPassword: "oldpass123", newPassword: "newpass456" }, reg.body.token);
+    assert.equal(r.status, 404);
+  });
+});
+
 // ── groups ────────────────────────────────────────────────────────────────────
 describe("groups", async () => {
   const ownerEmail = `test.owner.${Date.now()}@example.com`;
