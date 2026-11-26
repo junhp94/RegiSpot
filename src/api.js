@@ -17,6 +17,19 @@ function authHeaders(accessToken) {
 }
 
 // ============================================
+// Auth
+// ============================================
+
+export async function changePassword(currentPassword, newPassword, accessToken) {
+  const res = await fetch(`${API_BASE}/auth/change-password`, {
+    method: "POST",
+    headers: authHeaders(accessToken),
+    body: JSON.stringify({ currentPassword, newPassword }),
+  });
+  return readJson(res, {});
+}
+
+// ============================================
 // Groups
 // ============================================
 

@@ -23,6 +23,7 @@ npm run preview  # Preview production build
 npm run dev      # Start Express with nodemon
 npm start        # Production start
 npm test         # Run integration tests against Neon
+npm run reset-password -- <email> <newPassword>  # Reset a member's forgotten password (not the admin — its password comes from ADMIN_PASSWORD on every boot)
 ```
 
 ## Architecture
@@ -62,6 +63,7 @@ npm test         # Run integration tests against Neon
 POST   /auth/register
 POST   /auth/login
 GET    /auth/me
+POST   /auth/change-password
 GET    /users/me/groups
 POST   /groups
 POST   /groups/join
